@@ -13,10 +13,8 @@ enum HostAction {
     HOST_RESTORE = 4,
     HOST_MINIMIZE = 5,
     HOST_CLIENT_CHROME = 6,
-    HOST_VISIBILITY = 7,
     HOST_SET_SIZE = 8,
     HOST_SET_MIN_SIZE = 9,
-    HOST_SET_CLIENT = 10,
 };
 
 enum AtomIndex {
@@ -191,7 +189,6 @@ static void handle_map_request(const XMapRequestEvent *event)
 
     if (!client_window && !transient_for) {
         client_window = window;
-        send_host_action(HOST_SET_CLIENT, window, 0);
         maximized = false;
         unsigned long extents[] = {0, 0, 0, 0};
         XChangeProperty(display, window, atoms[NET_FRAME_EXTENTS], XA_CARDINAL, 32,
@@ -211,17 +208,12 @@ static void handle_map_request(const XMapRequestEvent *event)
             resize_host(attributes.width, attributes.height);
 
         fit_client_to_host();
+        puts("CLIENT shown");
         XChangeProperty(display, root_window, atoms[NET_ACTIVE_WINDOW], XA_WINDOW, 32,
                         PropModeReplace, (unsigned char *)&window, 1);
     }
     XMapWindow(display, window);
     XSetInputFocus(display, window, RevertToParent, CurrentTime);
-    if (window == client_window) {
-        XSync(display, False);
-        send_host_action(HOST_VISIBILITY, 1, 0);
-        XSync(display, False);
-        puts("CLIENT shown");
-    }
 }
 
 static bool left_button_pressed(void)
@@ -294,10 +286,7 @@ static void handle_client_message(const XClientMessageEvent *event)
     if (event->window != client_window)
         return;
 
-    if (event->message_type == atoms[NET_ACTIVE_WINDOW]) {
-        XRaiseWindow(display, client_window);
-        XSetInputFocus(display, client_window, RevertToParent, CurrentTime);
-    } else if (event->message_type == atoms[NET_WM_MOVERESIZE]) {
+    if (event->message_type == atoms[NET_WM_MOVERESIZE]) {
         /* EWMH resize directions, clockwise from top-left, to xdg_toplevel edges. */
         static const unsigned edges[] = {5, 1, 9, 8, 10, 2, 6, 4};
         long direction = event->data.l[2];
@@ -338,10 +327,9 @@ static void advertise_window_manager(void)
     Atom supported[] = {
         atoms[NET_WM_STATE], atoms[NET_WM_STATE_MAXIMIZED_HORZ], atoms[NET_WM_STATE_MAXIMIZED_VERT],
         atoms[NET_WM_MOVERESIZE], atoms[NET_SUPPORTING_WM_CHECK],
-        atoms[NET_ACTIVE_WINDOW],
     };
     XChangeProperty(display, root_window, atoms[NET_SUPPORTED], XA_ATOM, 32,
-                    PropModeReplace, (unsigned char *)supported, 6);
+                    PropModeReplace, (unsigned char *)supported, 5);
     Window check = XCreateSimpleWindow(display, root_window, -1, -1, 1, 1, 0, 0, 0);
     XChangeProperty(display, root_window, atoms[NET_SUPPORTING_WM_CHECK], XA_WINDOW, 32,
                     PropModeReplace, (unsigned char *)&check, 1);
