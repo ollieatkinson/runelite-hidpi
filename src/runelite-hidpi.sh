@@ -85,7 +85,7 @@ done
 geometry=$(jq -er 'select(.width>=320 and .width<=16383 and .height>=200 and .height<=16383) | "\(.width|floor)x\(.height|floor)"' "$state/window.json" 2>/dev/null) || geometry=1557x762
 server_pid='' wm_pid='' watcher_pid='' launcher_pid=''
 host_visibility() {
-    local visible=$1 center=${2:-0} script="$state/window-$server_pid.js" name="runelite-hidpi-window-$server_pid" operations id
+    local visible=$1 center=${2:-0} persistent=${3:-0} script="$state/window-$server_pid.js" name="runelite-hidpi-window-$server_pid" operations id
     if [[ $visible == 1 ]]; then
         operations='w.skipTaskbar=false;w.skipSwitcher=false;w.minimized=false;workspace.activeWindow=w;'
         if [[ $center == 1 ]]; then
@@ -98,8 +98,9 @@ host_visibility() {
     id=$(timeout 5 qdbus6 org.kde.KWin /Scripting org.kde.kwin.Scripting.loadScript "$script" "$name" 2>/dev/null) || return 0
     if [[ $id =~ ^[0-9]+$ ]]; then
         timeout 5 qdbus6 org.kde.KWin "/Scripting/Script$id" org.kde.kwin.Script.run >/dev/null 2>&1 || :
-        sleep .25
+        if [[ $persistent == 0 ]]; then sleep .25; fi
     fi
+    [[ $persistent == 0 ]] || return 0
     timeout 5 qdbus6 org.kde.KWin /Scripting org.kde.kwin.Scripting.unloadScript "$name" >/dev/null 2>&1 || :
     rm -f -- "$script"
 }
@@ -113,19 +114,28 @@ cleanup() {
         timeout 5 qdbus6 org.kde.KWin /Scripting org.kde.kwin.Scripting.unloadScript "runelite-hidpi-window-$server_pid" >/dev/null 2>&1 || :
         rm -f -- "$state/window-$server_pid.js"
     fi
-    rm -f -- "$state/active.json" "$state/wm.pipe" "$state/client-present"
+    rm -f -- "$state/active.json" "$state/wm.pipe" "$state/server.pipe" "$state/client-present"
 }
 trap cleanup EXIT
 trap 'exit 130' INT
 trap 'exit 143' TERM
 for log in server.log wm.log launcher-private.log; do : > "$state/$log"; chmod 600 "$state/$log"; done
 export RUNELITE_HIDPI_APP_ID=net.runelite.RuneLite.HiDPI
-if [[ ${RUNELITE_HIDPI_DEBUG:-0} == 1 ]]; then
-    WAYLAND_DEBUG=1 "$libdir/Xwayland" "$display" -geometry "$geometry" -hidpi -clipboard -nolisten tcp 9>&- >"$state/server.log" 2>&1 &
-else
-    "$libdir/Xwayland" "$display" -geometry "$geometry" -hidpi -clipboard -nolisten tcp 9>&- >"$state/server.log" 2>&1 &
-fi
+rm -f -- "$state/server.pipe"
+mkfifo "$state/server.pipe"
+exec 3<>"$state/server.pipe"
+(
+    IFS= read -r -u 3
+    exec 3>&-
+    if [[ ${RUNELITE_HIDPI_DEBUG:-0} == 1 ]]; then export WAYLAND_DEBUG=1; fi
+    exec "$libdir/Xwayland" "$display" -geometry "$geometry" -hidpi -clipboard -nolisten tcp
+) 9>&- >"$state/server.log" 2>&1 &
 server_pid=$!
+# Install the owned-window handler before the server can map its empty root.
+host_visibility 0 0 1
+printf '\n' >&3
+exec 3>&-
+rm -f -- "$state/server.pipe"
 client_environment "$display"
 ready=0
 for ((attempt=0;attempt<60;attempt++)); do
@@ -134,6 +144,7 @@ for ((attempt=0;attempt<60;attempt++)); do
     sleep .2
 done
 [[ $ready == 1 ]] || fail 'Private Xwayland did not become ready.'
+timeout 5 qdbus6 org.kde.KWin /Scripting org.kde.kwin.Scripting.unloadScript "runelite-hidpi-window-$server_pid" >/dev/null 2>&1 || :
 host_visibility 0
 rm -f -- "$state/wm.pipe"
 mkfifo "$state/wm.pipe"
