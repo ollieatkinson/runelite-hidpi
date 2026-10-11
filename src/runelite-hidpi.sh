@@ -98,9 +98,12 @@ done
 geometry=$(jq -er 'select(.width>=320 and .width<=16383 and .height>=200 and .height<=16383) | "\(.width|floor)x\(.height|floor)"' "$state/window.json" 2>/dev/null) || geometry=1557x762
 server_pid='' wm_pid='' watcher_pid='' launcher_pid=''
 host_visibility() {
-    local visible=$1 script="$state/window-$server_pid.js" name="runelite-hidpi-window-$server_pid" operations id
+    local visible=$1 center=${2:-0} script="$state/window-$server_pid.js" name="runelite-hidpi-window-$server_pid" operations id
     if [[ $visible == 1 ]]; then
         operations='w.skipTaskbar=false;w.skipSwitcher=false;w.minimized=false;workspace.activeWindow=w;'
+        if [[ $center == 1 ]]; then
+            operations+='const area=workspace.clientArea(KWin.PlacementArea,w);const g=w.frameGeometry;w.frameGeometry={x:area.x+(area.width-g.width)/2,y:area.y+(area.height-g.height)/2,width:g.width,height:g.height};'
+        fi
     else
         operations='w.minimized=true;w.skipTaskbar=true;w.skipSwitcher=true;'
     fi
@@ -150,6 +153,7 @@ mkfifo "$state/wm.pipe"
 printf '0\n' > "$state/client-present"
 (
     maximized=0
+    first_show=1
     while IFS= read -r line; do
         printf '%s\n' "$line" >> "$state/wm.log"
         case $line in
@@ -163,7 +167,8 @@ printf '0\n' > "$state/client-present"
             'CLIENT '*)
                 if [[ $line == *shown* ]]; then present=1; else present=0; fi
                 printf '%s\n' "$present" > "$state/client-present"
-                host_visibility "$present";;
+                host_visibility "$present" "$first_show"
+                if [[ $present == 1 ]]; then first_show=0; fi;;
         esac
     done < "$state/wm.pipe"
 ) 9>&- &
