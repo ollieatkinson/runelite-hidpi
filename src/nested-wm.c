@@ -108,6 +108,22 @@ static void fit_client_to_host(void)
     XSendEvent(display, client_window, False, StructureNotifyMask, &event);
 }
 
+static void repaint_client(void)
+{
+    if (!client_window)
+        return;
+
+    /* Root backing preservation can restore pixels after the usual exposures. */
+    XEvent event;
+    memset(&event, 0, sizeof(event));
+    event.xexpose.type = Expose;
+    event.xexpose.display = display;
+    event.xexpose.window = client_window;
+    event.xexpose.width = root_width;
+    event.xexpose.height = root_height;
+    XSendEvent(display, client_window, False, ExposureMask, &event);
+}
+
 static void set_wm_state(Window window, long state)
 {
     unsigned long values[] = {state, None};
@@ -208,12 +224,16 @@ static void handle_map_request(const XMapRequestEvent *event)
             resize_host(attributes.width, attributes.height);
 
         fit_client_to_host();
-        puts("CLIENT shown");
         XChangeProperty(display, root_window, atoms[NET_ACTIVE_WINDOW], XA_WINDOW, 32,
                         PropModeReplace, (unsigned char *)&window, 1);
     }
     XMapWindow(display, window);
     XSetInputFocus(display, window, RevertToParent, CurrentTime);
+    if (window == client_window) {
+        repaint_client();
+        XSync(display, False);
+        puts("CLIENT shown");
+    }
 }
 
 static bool left_button_pressed(void)
@@ -377,6 +397,7 @@ int main(void)
                 read_root_geometry();
                 fprintf(stderr, "ROOT %dx%d\n", root_width, root_height);
                 fit_client_to_host();
+                repaint_client();
             }
             break;
         case PropertyNotify:
