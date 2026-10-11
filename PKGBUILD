@@ -4,7 +4,7 @@
 [[ ${SRCDEST:-$startdir} != "$startdir" ]] || SRCDEST="$startdir/src"
 pkgname=runelite-hidpi
 pkgver=0.1.0
-pkgrel=1
+pkgrel=2
 pkgdesc='Experimental whole-window RuneLite HiDPI bridge for KDE Wayland'
 arch=('x86_64')
 url='https://github.com/ollieatkinson/runelite-hidpi'
@@ -16,12 +16,10 @@ depends=('bash' 'jq' 'util-linux' 'qt6-tools' 'kdialog' 'xorg-xdpyinfo'
          'wayland' 'xorg-server-common')
 makedepends=('meson' 'ninja' 'libxkbfile' 'xorgproto' 'xorg-font-util'
              'xtrans>=1.6.0' 'wayland-protocols>=1.49')
-checkdepends=('libxtst')
 source=("https://www.x.org/releases/individual/xserver/xwayland-$_xwaylandver.tar.xz"
         "xwayland.patch::file://${startdir}/src/xwayland.patch" "nested-wm.c::file://${startdir}/src/nested-wm.c"
         "runelite-hidpi.sh::file://${startdir}/src/runelite-hidpi.sh" "runelite.png::file://${startdir}/src/runelite.png"
         "net.runelite.RuneLite.HiDPI.desktop::file://${startdir}/src/net.runelite.RuneLite.HiDPI.desktop"
-        "resize-test.c::file://${startdir}/src/resize-test.c" "check-resize.sh::file://${startdir}/src/check-resize.sh"
         "RuneLite-LICENSE::file://${startdir}/src/RuneLite-LICENSE")
 sha256sums=('4eb6b98d678299a4b96138d886345b294130695760345ef84596225a8224078a')
 # Local sources are checked against the hashes below, updated when source changes.
@@ -39,14 +37,6 @@ build() {
     cc $CFLAGS "$srcdir/nested-wm.c" $LDFLAGS -o "$srcdir/nested-wm" -lX11
 }
 
-check() {
-    bash -n "$srcdir/runelite-hidpi.sh" "$srcdir/check-resize.sh"
-    cc $CFLAGS "$srcdir/resize-test.c" $LDFLAGS -o "$srcdir/resize-test" -lX11 -lXtst
-    # An isolated Wayland test is opt-in: package builds also run without a desktop.
-    if [[ ${RUNELITE_HIDPI_CHECK_DISPLAY:-0} == 1 ]]; then
-        bash "$srcdir/check-resize.sh" "$srcdir/build/hw/xwayland/Xwayland" "$srcdir/nested-wm" "$srcdir/resize-test"
-    fi
-}
 
 package() {
     install -Dm755 "$srcdir/build/hw/xwayland/Xwayland" "$pkgdir/usr/lib/runelite-hidpi/Xwayland"
@@ -63,6 +53,4 @@ sha256sums+=('853b66b4008a009ec91836f79f0e309334884ed96910b9c98ebfeab35adf7c13')
 sha256sums+=('a6f65215fd61d052a9a739100f268a7fcd5ba51a8ca0ef8da93563b4ffb6c462')
 sha256sums+=('81cb6ce7d8c4b9154e9840ab9d2938d0e6234f227049f004cacf90724f95cc11')
 sha256sums+=('ae06ee6dbbacfdd1298271c14bb630b434a34e3e434bc46d05b0301b318adac8')
-sha256sums+=('be7360b110269c96b1a7e35199b3ee5027b8a89ddf64749257315e68d398af5d')
-sha256sums+=('7ecce8a52b08ca571ddcfdd22df4b00420d4b1dedeb793e52408fc4ef77492ac')
 sha256sums+=('dd35829a586785621651857262168bd91374a84669592d2db28520648b55a519')

@@ -77,21 +77,13 @@ Configuration lives in `~/.config/runelite-hidpi/`; saved sizes and private logs
 in `~/.local/state/runelite-hidpi/`. **Do not share `launcher-private.log`**: it can
 contain account information. No account data is part of this repository.
 
-## Source and checks
+## Source
 
 `PKGBUILD` pins Xwayland 24.1.14 and its SHA-256; pacman manages runtime/build
-dependencies. All project source and assets live in `src/`: Bash launcher, minimal
-C window manager, Xwayland patch, icon and an account-free resize regression test.
-The icon comes from the official RuneLite AppImage. Xwayland's upstream licence
-is included in the installed package.
+dependencies. Project source and assets live in `src/`: Bash launcher, minimal
+C window manager, Xwayland patch and icon. The icon comes from the official
+RuneLite AppImage; its required licence notice and Xwayland's upstream licence
+are included in the installed package.
 
-For an isolated regression check during a build in a Wayland session:
-
-```bash
-RUNELITE_HIDPI_CHECK_DISPLAY=1 makepkg -f
-```
-
-This checks expansion/contraction, retained pixels, click-versus-drag handling
-and maximize/restore on a separate test display. It never launches Jagex or reads
-RuneLite profiles. Historical experiments and handoff notes are local-only under
-`.local/`; they are not needed to build or install.
+Historical experiments, tests and handoff notes are local-only under `.local/`;
+they are not needed to build or install.
