@@ -19,6 +19,33 @@ desktop_quote() {
     value=${value//\$/\\\$}; value=${value//\`/\\\`}; value=${value//%/%%}
     printf '"%s"' "$value"
 }
+# Read only a direct AppImage command; never evaluate desktop-entry shell text.
+resolve_launcher() {
+    local entry line candidate='' value
+    for entry in "$apps/jagex-launcher.desktop" /usr/local/share/applications/jagex-launcher.desktop /usr/share/applications/jagex-launcher.desktop; do
+        [[ -f $entry ]] || continue
+        while IFS= read -r line; do
+            if [[ $line == TryExec=* ]]; then
+                candidate=${line#TryExec=}
+                break
+            fi
+            if [[ $line =~ ^Exec=\"([^\"]+)\"([[:space:]]|$) ]]; then
+                candidate=${BASH_REMATCH[1]}
+            elif [[ $line =~ ^Exec=([^[:space:]]+)([[:space:]]|$) ]]; then
+                candidate=${BASH_REMATCH[1]}
+            fi
+        done < "$entry"
+        # Decode the desktop-entry escapes supported in filesystem paths.
+        value=${candidate//\\s/ }; value=${value//\\\\/\\}
+        if [[ $value == /* && ${value,,} == *.appimage && -f $value && -x $value ]]; then
+            app=$value
+            return
+        fi
+        candidate=''
+    done
+    [[ -f $config/launcher ]] && IFS= read -r app < "$config/launcher"
+    [[ -n ${app:-} && -f $app && -x $app ]]
+}
 case ${1:-} in
     --setup)
         [[ $# == 2 && -x $2 && -f $2 ]] || fail 'Usage: runelite-hidpi --setup /absolute/path/to/Jagex.AppImage'
@@ -50,8 +77,7 @@ case ${1:-} in
         exit 0;;
 esac
 [[ -n ${WAYLAND_DISPLAY:-} && ${XDG_CURRENT_DESKTOP:-} == *KDE* ]] || fail 'This experimental launcher requires KDE on Wayland.'
-[[ -f $config/launcher ]] || fail 'First run: runelite-hidpi --setup /path/to/Jagex.AppImage'
-IFS= read -r app < "$config/launcher"
+resolve_launcher || fail 'Cannot find Jagex Launcher. Run runelite-hidpi --setup /path/to/Jagex.AppImage'
 for file in "$app" "$libdir/Xwayland" "$libdir/nested-wm"; do
     [[ -x $file ]] || fail "Required executable unavailable: $file"
 done
