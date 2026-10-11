@@ -4,7 +4,7 @@
 [[ ${SRCDEST:-$startdir} != "$startdir" ]] || SRCDEST="$startdir/src"
 pkgname=runelite-hidpi
 pkgver=0.1.0
-pkgrel=13
+pkgrel=14
 pkgdesc='Experimental whole-window RuneLite HiDPI bridge for KDE Wayland'
 arch=('x86_64')
 url='https://github.com/ollieatkinson/runelite-hidpi'
@@ -50,7 +50,7 @@ package() {
 }
 sha256sums+=('3f8fe851c2d7731ac0f551af455d0f5b3d9dfc280415f4720e09252c860a7535')
 sha256sums+=('edf56cea61604a1dfefcaf279c230cc76087c3c7401122a67a093c10944cc444')
-sha256sums+=('cb40db080690b8694dfd4060d337bba3aa75f8102ce1effbc7e600b94b62dbec')
+sha256sums+=('32479e842b3ea3b37f97f59fb9c4ae3bb64776939601cd90780ad740a1d98dac')
 sha256sums+=('81cb6ce7d8c4b9154e9840ab9d2938d0e6234f227049f004cacf90724f95cc11')
 sha256sums+=('ae06ee6dbbacfdd1298271c14bb630b434a34e3e434bc46d05b0301b318adac8')
 sha256sums+=('dd35829a586785621651857262168bd91374a84669592d2db28520648b55a519')
