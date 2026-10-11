@@ -152,7 +152,6 @@ mkfifo "$state/wm.pipe"
 printf '0\n' > "$state/client-present"
 (
     maximized=0
-    first_show=1
     visible=0
     present=0
     handoff=0
@@ -189,10 +188,9 @@ printf '0\n' > "$state/client-present"
                 if [[ $line == *shown* ]]; then present=1; else present=0; handoff=1; fi
                 if [[ $present == 1 ]]; then printf '1\n' > "$state/client-present"; fi
                 if [[ $present == 1 && $visible == 0 ]]; then
-                    center_pending=$first_show
+                    center_pending=1
                     host_visibility 1
                     visible=1
-                    first_show=0
                 elif [[ $present == 1 && $handoff == 1 ]]; then
                     center_pending=1
                     startup=0
