@@ -1,0 +1,8 @@
+[Desktop Entry]
+Type=Application
+Name=RuneLite (HiDPI)
+Exec=runelite-hidpi
+Icon=runelite-hidpi
+StartupWMClass=net.runelite.RuneLite.HiDPI
+NoDisplay=true
+Categories=Game;

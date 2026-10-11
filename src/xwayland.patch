@@ -1,0 +1,310 @@
+--- a/hw/xwayland/xwayland-screen.c
++++ b/hw/xwayland/xwayland-screen.c
+@@ -46,6 +46,7 @@
+ 
+ #include "xwayland-cursor.h"
+ #include "xwayland-screen.h"
++#include "xdg-decoration-unstable-v1-client-protocol.h"
+ #include "xwayland-window.h"
+ #include "xwayland-input.h"
+ #include "xwayland-output.h"
+@@ -175,6 +176,19 @@
+         return;
+ 
+     xwl_screen = xwl_screen_get(screen);
++
++    /* Commands from the private nested WM apply only to this rootful surface. */
++    if (!xwl_screen->rootless && rec->win == screen->root && rec->state == PropertyNewValue) {
++        const char *name = NameForAtom(rec->prop->propertyName);
++        if (name && strcmp(name, "_RUNELITE_HOST_ACTION") == 0 && rec->prop->format == 32 && rec->prop->size >= 3) {
++            uint32_t *v = rec->prop->data;
++            xwl_window_host_action(xwl_window, v[0], v[1], v[2]);
++        }
++        if (name && strcmp(name, "_RUNELITE_HOST_TITLE") == 0 && rec->prop->format == 8 && xwl_window->xdg_toplevel) {
++            char *title = strndup(rec->prop->data, rec->prop->size);
++            if (title) { xdg_toplevel_set_title(xwl_window->xdg_toplevel, title); free(title); }
++        }
++    }
+ 
+     if (rec->prop->propertyName == xwl_screen->allow_commits_prop)
+         xwl_window_update_property(xwl_window, rec);
+@@ -503,6 +517,9 @@
+     else if (strcmp(interface, wl_shm_interface.name) == 0) {
+         xwl_screen->shm = wl_registry_bind(registry, id, &wl_shm_interface, 1);
+     }
++    else if (strcmp(interface, zxdg_decoration_manager_v1_interface.name) == 0) {
++        xwl_screen->decoration_manager = wl_registry_bind(registry, id, &zxdg_decoration_manager_v1_interface, 1);
++    }
+     else if (strcmp(interface, xdg_wm_base_interface.name) == 0) {
+         xwl_screen->xdg_wm_base =
+             wl_registry_bind(registry, id, &xdg_wm_base_interface, 1);
+@@ -809,6 +826,9 @@
+ Bool
+ xwl_screen_should_use_fractional_scale(struct xwl_screen *xwl_screen)
+ {
++    /* Workspace experiment: preserve integer HiDPI backing for host downsampling. */
++    if (xwl_screen->hidpi && !xwl_screen->rootless)
++        return FALSE;
+     /* Fullscreen uses a viewport already */
+     if (xwl_screen->fullscreen)
+         return FALSE;
+--- a/hw/xwayland/xwayland-screen.h
++++ b/hw/xwayland/xwayland-screen.h
+@@ -103,6 +103,8 @@
+     struct zwp_tablet_manager_v2 *tablet_manager;
+     struct wl_shm *shm;
+     struct xdg_wm_base *xdg_wm_base;
++    struct zxdg_decoration_manager_v1 *decoration_manager;
++    Bool runelite_client_chrome;
+     struct zwp_relative_pointer_manager_v1 *relative_pointer_manager;
+     struct zwp_pointer_constraints_v1 *pointer_constraints;
+     struct zwp_pointer_gestures_v1 *pointer_gestures;
+--- a/hw/xwayland/xwayland-window.c
++++ b/hw/xwayland/xwayland-window.c
+@@ -53,6 +53,7 @@
+ #include "tearing-control-v1-client-protocol.h"
+ #include "viewporter-client-protocol.h"
+ #include "xdg-shell-client-protocol.h"
++#include "xdg-decoration-unstable-v1-client-protocol.h"
+ #include "xwayland-shell-v1-client-protocol.h"
+ #include "fractional-scale-v1-client-protocol.h"
+ #include "linux-drm-syncobj-v1-client-protocol.h"
+@@ -874,7 +875,9 @@
+ static void
+ xwl_window_rootful_set_app_id(struct xwl_window *xwl_window)
+ {
+-    const char *app_id = "org.freedesktop.Xwayland";
++    const char *app_id = getenv("RUNELITE_HIDPI_APP_ID");
++    if (!app_id || !*app_id)
++        app_id = "org.freedesktop.Xwayland";
+ 
+ #ifdef XWL_HAS_LIBDECOR
+     if (xwl_window->libdecor_frame)
+@@ -1195,11 +1198,21 @@
+     Bool old_active = xwl_screen->active;
+     double scale, new_width, new_height;
+ 
+-    /* Maintain our current size if no dimensions are requested */
+-    if (width == 0 && height == 0)
+-        return;
+-
+-    if (!xwl_screen->fullscreen) {
++    /* Publish host state even when the compositor leaves dimensions unchanged. */
++    uint32_t host_state = 0;
++    wl_array_for_each (p, states) {
++        if (*p == XDG_TOPLEVEL_STATE_MAXIMIZED)
++            host_state |= 1;
++    }
++    if (!xwl_screen->rootless) {
++        const char *name = "_RUNELITE_HOST_STATE";
++        Atom atom = MakeAtom(name, strlen(name), TRUE);
++        dixChangeWindowProperty(serverClient, xwl_screen->screen->root,
++                                atom, XA_CARDINAL, 32, PropModeReplace,
++                                1, &host_state, TRUE);
++    }
++
++    if (!xwl_screen->fullscreen && width > 0 && height > 0) {
+         new_width = (double) (width * xwl_screen->global_surface_scale);
+         new_height = (double) (height * xwl_screen->global_surface_scale);
+ 
+@@ -1290,6 +1303,51 @@
+ static const struct wp_fractional_scale_v1_listener fractional_scale_listener = {
+    wp_fractional_scale_preferred_scale,
+ };
++
++/* Workspace-only rootful bridge: one client controls its host Wayland window. */
++void
++xwl_window_host_action(struct xwl_window *w, uint32_t action, uint32_t a, uint32_t b)
++{
++    struct xwl_screen *screen = w->xwl_screen;
++    struct xwl_seat *seat;
++    if (!w->xdg_toplevel || screen->rootless)
++        return;
++    switch (action) {
++    case 1: case 2:
++        xorg_list_for_each_entry(seat, &screen->seat_list, link) {
++            if (seat->host_button_serial && seat->focus_window == w) {
++                if (action == 1)
++                    xdg_toplevel_move(w->xdg_toplevel, seat->seat, seat->host_button_serial);
++                else
++                    xdg_toplevel_resize(w->xdg_toplevel, seat->seat, seat->host_button_serial, a);
++                break;
++            }
++        }
++        break;
++    case 3: xdg_toplevel_set_maximized(w->xdg_toplevel); break;
++    case 4: xdg_toplevel_unset_maximized(w->xdg_toplevel); break;
++    case 5: xdg_toplevel_set_minimized(w->xdg_toplevel); break;
++    case 6:
++        screen->runelite_client_chrome = TRUE;
++        if (w->server_decoration)
++            zxdg_toplevel_decoration_v1_set_mode(w->server_decoration, ZXDG_TOPLEVEL_DECORATION_V1_MODE_CLIENT_SIDE);
++        break;
++    case 8:
++        xwl_window_maybe_resize(w, a, b);
++        break;
++    case 9:
++        xdg_toplevel_set_min_size(w->xdg_toplevel,
++            (a + screen->global_surface_scale - 1) / screen->global_surface_scale,
++            (b + screen->global_surface_scale - 1) / screen->global_surface_scale);
++        break;
++    }
++    wl_surface_commit(w->surface);
++    wl_display_flush(screen->display);
++}
++
++static void
++server_decoration_configure(void *data, struct zxdg_toplevel_decoration_v1 *decoration, uint32_t mode) {}
++static const struct zxdg_toplevel_decoration_v1_listener server_decoration_listener = { server_decoration_configure };
+ 
+ static Bool
+ xwl_create_root_surface(struct xwl_window *xwl_window)
+@@ -1324,6 +1382,12 @@
+         if (xwl_window->xdg_surface == NULL) {
+             ErrorF("Failed creating xdg_toplevel\n");
+             goto err_surf;
++        }
++
++        if (xwl_screen->decoration_manager) {
++            xwl_window->server_decoration = zxdg_decoration_manager_v1_get_toplevel_decoration(xwl_screen->decoration_manager, xwl_window->xdg_toplevel);
++            zxdg_toplevel_decoration_v1_add_listener(xwl_window->server_decoration, &server_decoration_listener, xwl_window);
++            zxdg_toplevel_decoration_v1_set_mode(xwl_window->server_decoration, xwl_screen->runelite_client_chrome ? ZXDG_TOPLEVEL_DECORATION_V1_MODE_CLIENT_SIDE : ZXDG_TOPLEVEL_DECORATION_V1_MODE_SERVER_SIDE);
+         }
+ 
+         xdg_surface_add_listener(xwl_window->xdg_surface,
+--- a/hw/xwayland/xwayland-window.h
++++ b/hw/xwayland/xwayland-window.h
+@@ -62,6 +62,7 @@
+     int surface_scale;
+     struct xdg_surface *xdg_surface;
+     struct xdg_toplevel *xdg_toplevel;
++    struct zxdg_toplevel_decoration_v1 *server_decoration;
+ 
+     /* Top-level window for the Wayland surface:
+      * - With rootful, the root window itself
+@@ -108,6 +109,7 @@
+     struct wp_linux_drm_syncobj_surface_v1 *surface_sync;
+ };
+ 
++void xwl_window_host_action(struct xwl_window *window, uint32_t action, uint32_t a, uint32_t b);
+ struct xwl_window *xwl_window_get(WindowPtr window);
+ RegionPtr xwl_window_get_damage_region(struct xwl_window *xwl_window);
+ struct xwl_window *xwl_window_from_window(WindowPtr window);
+--- a/hw/xwayland/xwayland-input.c
++++ b/hw/xwayland/xwayland-input.c
+@@ -814,6 +814,8 @@
+     ValuatorMask mask;
+ 
+     xwl_seat->xwl_screen->serial = serial;
++    if (state == WL_POINTER_BUTTON_STATE_PRESSED)
++        xwl_seat->host_button_serial = serial;
+ 
+     switch (button) {
+     case BTN_LEFT:
+--- a/hw/xwayland/xwayland-input.h
++++ b/hw/xwayland/xwayland-input.h
+@@ -76,6 +76,7 @@
+     struct xwl_window *tablet_focus_window;
+     uint32_t id;
+     uint32_t pointer_enter_serial;
++    uint32_t host_button_serial;
+     uint8_t pointer_enter_count;
+     Bool caps_initialized;
+     struct xorg_list link;
+--- a/hw/xwayland/xwayland-output.c
++++ b/hw/xwayland/xwayland-output.c
+@@ -29,6 +29,7 @@
+ 
+ #include <X11/Xatom.h>
+ #include "randrstr_priv.h"
++#include "gcstruct.h"
+ 
+ #include "xwayland-cvt.h"
+ #include "xwayland-output.h"
+@@ -162,7 +163,7 @@
+     return WT_DONTWALKCHILDREN;
+ }
+ 
+-static void
++static PixmapPtr
+ update_backing_pixmaps(struct xwl_screen *xwl_screen, int width, int height)
+ {
+     ScreenPtr pScreen = xwl_screen->screen;
+@@ -177,15 +178,17 @@
+ 
+     if (old_pixmap) {
+         TraverseTree(pRoot, xwl_set_pixmap_visit_window, old_pixmap);
+-        pScreen->DestroyPixmap(old_pixmap);
+     }
+ 
+     pScreen->ResizeWindow(pRoot, 0, 0, width, height, NULL);
++    return old_pixmap;
+ }
+ 
+ static void
+ update_screen_size(struct xwl_screen *xwl_screen, int width, int height)
+ {
++    ScreenPtr pScreen = xwl_screen->screen;
++    PixmapPtr old_pixmap = NULL, new_pixmap;
+     if (xwl_screen_get_width(xwl_screen) != width)
+         xwl_screen->width = width;
+ 
+@@ -196,7 +199,7 @@
+         SetRootClip(xwl_screen->screen, ROOT_CLIP_NONE);
+ 
+     if (!xwl_screen->rootless && xwl_screen->screen->root)
+-        update_backing_pixmaps (xwl_screen, width, height);
++        old_pixmap = update_backing_pixmaps (xwl_screen, width, height);
+ 
+     xwl_screen->screen->width = width;
+     xwl_screen->screen->height = height;
+@@ -204,6 +207,23 @@
+     xwl_screen->screen->mmHeight = (height * 25.4) / monitorResolution;
+ 
+     SetRootClip(xwl_screen->screen, xwl_screen->root_clip_mode);
++
++    /* Root clip restoration repaints backgrounds; restore pixels afterwards. */
++    new_pixmap = pScreen->GetScreenPixmap(pScreen);
++    /* Retain the existing rootful image until clients repaint after resize. */
++    if (old_pixmap && new_pixmap) {
++        GCPtr gc = GetScratchGC(new_pixmap->drawable.depth, pScreen);
++        if (gc) {
++            ValidateGC(&new_pixmap->drawable, gc);
++            (*gc->ops->CopyArea)(&old_pixmap->drawable, &new_pixmap->drawable,
++                                gc, 0, 0,
++                                min(old_pixmap->drawable.width, width),
++                                min(old_pixmap->drawable.height, height), 0, 0);
++            FreeScratchGC(gc);
++        }
++    }
++    if (old_pixmap)
++        pScreen->DestroyPixmap(old_pixmap);
+ 
+     if (xwl_screen->screen->root) {
+         BoxRec box = { 0, 0, width, height };
+--- a/hw/xwayland/meson.build
++++ b/hw/xwayland/meson.build
+@@ -45,6 +45,7 @@
+ dmabuf_xml = join_paths(protodir, 'unstable', 'linux-dmabuf', 'linux-dmabuf-unstable-v1.xml')
+ viewporter_xml = join_paths(protodir, 'stable', 'viewporter', 'viewporter.xml')
+ xdg_shell_xml = join_paths(protodir, 'stable', 'xdg-shell', 'xdg-shell.xml')
++xdg_decoration_xml = join_paths(protodir, 'unstable', 'xdg-decoration', 'xdg-decoration-unstable-v1.xml')
+ drm_lease_xml = join_paths(protodir, 'staging', 'drm-lease', 'drm-lease-v1.xml')
+ shortcuts_inhibit_xml = join_paths(protodir, 'unstable', 'keyboard-shortcuts-inhibit', 'keyboard-shortcuts-inhibit-unstable-v1.xml')
+ xwayland_shell_xml = join_paths(protodir, 'staging', 'xwayland-shell', 'xwayland-shell-v1.xml')
+@@ -76,6 +77,7 @@
+ srcs += client_header.process(dmabuf_xml)
+ srcs += client_header.process(viewporter_xml)
+ srcs += client_header.process(xdg_shell_xml)
++srcs += client_header.process(xdg_decoration_xml)
+ srcs += client_header.process(drm_lease_xml)
+ srcs += client_header.process(shortcuts_inhibit_xml)
+ srcs += client_header.process(xwayland_shell_xml)
+@@ -91,6 +93,7 @@
+ srcs += code.process(dmabuf_xml)
+ srcs += code.process(viewporter_xml)
+ srcs += code.process(xdg_shell_xml)
++srcs += code.process(xdg_decoration_xml)
+ srcs += code.process(drm_lease_xml)
+ srcs += code.process(shortcuts_inhibit_xml)
+ srcs += code.process(xwayland_shell_xml)

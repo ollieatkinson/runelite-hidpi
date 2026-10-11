@@ -1,0 +1,5 @@
+.local/
+/src/*.tar.xz
+/*.pkg.tar.*
+/*.src.tar.*
+/*.tar.xz
