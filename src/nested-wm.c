@@ -100,7 +100,16 @@ int main(void) {
                 unsigned long extents[4]={0,0,0,0};
                 XChangeProperty(d,w,XInternAtom(d,"_NET_FRAME_EXTENTS",False),XA_CARDINAL,32,PropModeReplace,(unsigned char *)extents,4);
                 XSelectInput(d,w,PropertyChangeMask);
-                sync_host_state();fill();title();chrome();minsize();
+                sync_host_state();title();chrome();minsize();
+                /* Honour the client startup size instead of stretching it to the
+                 * last host size (which may include a different sidebar). */
+                if(!maximized && XGetWindowAttributes(d,w,&a) &&
+                   (a.width!=rw || a.height!=rh)) {
+                    action(8,a.width,a.height);
+                    XSync(d,False);
+                    XGetWindowAttributes(d,root,&a);rw=a.width;rh=a.height;
+                }
+                fill();
                 puts("CLIENT shown");
                 XChangeProperty(d,root,XInternAtom(d,"_NET_ACTIVE_WINDOW",False),XA_WINDOW,32,PropModeReplace,(unsigned char *)&w,1);
             }
