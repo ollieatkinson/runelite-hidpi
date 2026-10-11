@@ -2,7 +2,8 @@
 # Stock Jagex/RuneLite in a private integer-backing Xwayland. No profile edits.
 set -euo pipefail
 umask 077
-libdir=${RUNELITE_HIDPI_LIBDIR:-/usr/lib/runelite-hidpi}
+bindir=$(dirname -- "$(realpath -- "$0")")
+libdir=${RUNELITE_HIDPI_LIBDIR:-$bindir/../lib/runelite-hidpi}
 config=${XDG_CONFIG_HOME:-$HOME/.config}/runelite-hidpi
 state=${XDG_STATE_HOME:-$HOME/.local/state}/runelite-hidpi
 apps=${XDG_DATA_HOME:-$HOME/.local/share}/applications
