@@ -44,18 +44,19 @@ index 3cb5223..0f06a6f 100644
      Bool caps_initialized;
      struct xorg_list link;
 diff --git a/hw/xwayland/xwayland-output.c b/hw/xwayland/xwayland-output.c
-index 674a2c2..3028d4f 100644
+index 674a2c2..27caf7d 100644
 --- a/hw/xwayland/xwayland-output.c
 +++ b/hw/xwayland/xwayland-output.c
-@@ -29,6 +29,7 @@
+@@ -29,6 +29,8 @@
  
  #include <X11/Xatom.h>
  #include "randrstr_priv.h"
 +#include "gcstruct.h"
++#include "damage.h"
  
  #include "xwayland-cvt.h"
  #include "xwayland-output.h"
-@@ -193,7 +194,7 @@ xwl_set_pixmap_visit_window(WindowPtr window, void *data)
+@@ -193,7 +195,7 @@ xwl_set_pixmap_visit_window(WindowPtr window, void *data)
      return WT_DONTWALKCHILDREN;
  }
  
@@ -64,7 +65,7 @@ index 674a2c2..3028d4f 100644
  update_backing_pixmaps(struct xwl_screen *xwl_screen, int width, int height)
  {
      ScreenPtr pScreen = xwl_screen->screen;
-@@ -208,15 +209,17 @@ update_backing_pixmaps(struct xwl_screen *xwl_screen, int width, int height)
+@@ -208,15 +210,17 @@ update_backing_pixmaps(struct xwl_screen *xwl_screen, int width, int height)
  
      if (old_pixmap) {
          TraverseTree(pRoot, xwl_set_pixmap_visit_window, old_pixmap);
@@ -83,7 +84,7 @@ index 674a2c2..3028d4f 100644
      if (xwl_screen_get_width(xwl_screen) != width)
          xwl_screen->width = width;
  
-@@ -227,7 +230,7 @@ update_screen_size(struct xwl_screen *xwl_screen, int width, int height)
+@@ -227,7 +231,7 @@ update_screen_size(struct xwl_screen *xwl_screen, int width, int height)
          SetRootClip(xwl_screen->screen, ROOT_CLIP_NONE);
  
      if (!xwl_screen->rootless && xwl_screen->screen->root)
@@ -92,7 +93,7 @@ index 674a2c2..3028d4f 100644
  
      xwl_screen->screen->width = width;
      xwl_screen->screen->height = height;
-@@ -236,6 +239,23 @@ update_screen_size(struct xwl_screen *xwl_screen, int width, int height)
+@@ -236,12 +240,32 @@ update_screen_size(struct xwl_screen *xwl_screen, int width, int height)
  
      SetRootClip(xwl_screen->screen, xwl_screen->root_clip_mode);
  
@@ -115,6 +116,15 @@ index 674a2c2..3028d4f 100644
 +
      if (xwl_screen->screen->root) {
          BoxRec box = { 0, 0, width, height };
+ 
+         xwl_screen->screen->root->drawable.width = width;
+         xwl_screen->screen->root->drawable.height = height;
+         RegionReset(&xwl_screen->screen->root->winSize, &box);
++        /* CopyArea targets the pixmap, so report the restored root image too. */
++        if (!xwl_screen->rootless)
++            DamageDamageRegion(&pScreen->root->drawable, &pScreen->root->winSize);
+         RRScreenSizeNotify(xwl_screen->screen);
+     }
  
 diff --git a/hw/xwayland/xwayland-screen.c b/hw/xwayland/xwayland-screen.c
 index d47cb19..97f1e51 100644
