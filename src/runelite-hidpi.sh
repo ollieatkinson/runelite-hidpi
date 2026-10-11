@@ -98,8 +98,9 @@ host_visibility() {
                 operations+='const area=workspace.clientArea(KWin.PlacementArea,w);const g=w.frameGeometry;const c=w.clientGeometry;const width='"$width"'/2+g.width-c.width;const height='"$height"'/2+g.height-c.height;w.frameGeometry={x:area.x+(area.width-width)/2,y:area.y+(area.height-height)/2,width:width,height:height};'
             fi
         fi
+        operations+='w.opacity=1;'
     else
-        operations='w.minimized=true;w.skipTaskbar=true;w.skipSwitcher=true;'
+        operations='w.opacity=0;w.minimized=true;w.skipTaskbar=true;w.skipSwitcher=true;'
     fi
     printf 'function apply(w){if(w.pid===%s){%s}};for(const w of workspace.windowList())apply(w);workspace.windowAdded.connect(apply);\n' "$server_pid" "$operations" > "$script"
     id=$(timeout 5 qdbus6 org.kde.KWin /Scripting org.kde.kwin.Scripting.loadScript "$script" "$name" 2>/dev/null) || return 0
@@ -162,6 +163,7 @@ printf '0\n' > "$state/client-present"
     visible=0
     present=0
     handoff=0
+    startup=1
     while true; do
         # The splash closes just before the main window maps. Keep the host
         # visible through that handoff instead of minimizing and restoring it.
@@ -169,6 +171,7 @@ printf '0\n' > "$state/client-present"
             if ! IFS= read -r -t .4 line; then
                 host_visibility 0
                 visible=0
+                startup=1
                 printf '0\n' > "$state/client-present"
                 continue
             fi
@@ -193,6 +196,12 @@ printf '0\n' > "$state/client-present"
                     first_show=0
                 elif [[ $present == 1 && $handoff == 1 ]]; then
                     host_visibility 1 1
+                    startup=0
+                elif [[ $present == 0 && $startup == 0 ]]; then
+                    host_visibility 0
+                    visible=0
+                    startup=1
+                    printf '0\n' > "$state/client-present"
                 fi
                 if [[ $present == 1 ]]; then handoff=0; fi;;
         esac
