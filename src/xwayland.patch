@@ -182,7 +182,7 @@ index 8f4ce5c..f8ff610 100644
      struct zwp_pointer_constraints_v1 *pointer_constraints;
      struct zwp_pointer_gestures_v1 *pointer_gestures;
 diff --git a/hw/xwayland/xwayland-window.c b/hw/xwayland/xwayland-window.c
-index c3cc56c..6ab4aac 100644
+index c3cc56c..52d16f7 100644
 --- a/hw/xwayland/xwayland-window.c
 +++ b/hw/xwayland/xwayland-window.c
 @@ -53,6 +53,7 @@
@@ -250,7 +250,7 @@ index c3cc56c..6ab4aac 100644
      }
  
      xwl_screen->active = FALSE;
-@@ -1329,6 +1344,51 @@ static const struct wp_fractional_scale_v1_listener fractional_scale_listener =
+@@ -1329,6 +1344,66 @@ static const struct wp_fractional_scale_v1_listener fractional_scale_listener =
     wp_fractional_scale_preferred_scale,
  };
  
@@ -282,6 +282,21 @@ index c3cc56c..6ab4aac 100644
 +        if (w->server_decoration)
 +            zxdg_toplevel_decoration_v1_set_mode(w->server_decoration, ZXDG_TOPLEVEL_DECORATION_V1_MODE_CLIENT_SIDE);
 +        break;
++    case 7:
++        xwl_window_set_allow_commits(w, !!a, "host visibility");
++        if (w->host_hidden == !a)
++            return;
++        w->host_hidden = !a;
++        if (a) {
++            /* A withdrawn xdg_surface needs a fresh initial configure. */
++            w->awaiting_initial_configure_event = TRUE;
++        } else {
++            wl_surface_attach(w->surface, NULL, 0, 0);
++        }
++        break;
++    case 10:
++        w->host_client = a;
++        break;
 +    case 8:
 +        xwl_window_maybe_resize(w, a, b);
 +        break;
@@ -302,7 +317,7 @@ index c3cc56c..6ab4aac 100644
  static Bool
  xwl_create_root_surface(struct xwl_window *xwl_window)
  {
-@@ -1363,6 +1423,12 @@ xwl_create_root_surface(struct xwl_window *xwl_window)
+@@ -1363,6 +1438,12 @@ xwl_create_root_surface(struct xwl_window *xwl_window)
              goto err_surf;
          }
  
@@ -315,8 +330,31 @@ index c3cc56c..6ab4aac 100644
          xdg_surface_add_listener(xwl_window->xdg_surface,
                                   &xdg_surface_listener, xwl_window);
  
+@@ -1797,6 +1878,11 @@ xwl_unrealize_window(WindowPtr window)
+     struct xwl_window *xwl_window = xwl_window_from_window(window);
+     Bool ret;
+ 
++    /* Retain the last frame until the WM withdraws the host or maps its successor. */
++    if (!xwl_screen->rootless && xwl_window &&
++        window->drawable.id == xwl_window->host_client)
++        xwl_window_set_allow_commits(xwl_window, FALSE, "host client unmapped");
++
+     screen->UnrealizeWindow = xwl_screen->UnrealizeWindow;
+     ret = (*screen->UnrealizeWindow) (window);
+     xwl_screen->UnrealizeWindow = screen->UnrealizeWindow;
+@@ -2079,6 +2165,10 @@ xwl_window_attach_buffer(struct xwl_window *xwl_window)
+     PixmapPtr pixmap;
+     int i;
+ 
++    if (xwl_window->host_hidden ||
++        (xwl_window->host_client && !xwl_window->allow_commits))
++        return FALSE;
++
+     pixmap = xwl_window_swap_pixmap(xwl_window, TRUE);
+     buffer = xwl_pixmap_get_wl_buffer(pixmap);
+ 
 diff --git a/hw/xwayland/xwayland-window.h b/hw/xwayland/xwayland-window.h
-index 09d5305..aad6c48 100644
+index 09d5305..f666745 100644
 --- a/hw/xwayland/xwayland-window.h
 +++ b/hw/xwayland/xwayland-window.h
 @@ -62,6 +62,7 @@ struct xwl_window {
@@ -327,7 +365,16 @@ index 09d5305..aad6c48 100644
  
      /* Top-level window for the Wayland surface:
       * - With rootful, the root window itself
-@@ -109,6 +110,7 @@ struct xwl_window {
+@@ -88,6 +89,8 @@ struct xwl_window {
+     struct xorg_list link_window;
+     struct wl_callback *frame_callback;
+     Bool allow_commits;
++    Bool host_hidden;
++    XID host_client;
+     struct xorg_list window_buffers_available;
+     struct xorg_list window_buffers_unavailable;
+     OsTimerPtr window_buffers_timer;
+@@ -109,6 +112,7 @@ struct xwl_window {
      Bool awaiting_initial_configure_event;
  };
  

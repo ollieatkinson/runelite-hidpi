@@ -4,13 +4,13 @@
 [[ ${SRCDEST:-$startdir} != "$startdir" ]] || SRCDEST="$startdir/src"
 pkgname=runelite-hidpi
 pkgver=0.1.0
-pkgrel=15
+pkgrel=16
 pkgdesc='Experimental whole-window RuneLite HiDPI bridge for KDE Wayland'
 arch=('x86_64')
 url='https://github.com/ollieatkinson/runelite-hidpi'
 license=('MIT' 'BSD-2-Clause')
 _xwaylandver=26.0.99.903
-depends=('bash' 'jq' 'util-linux' 'qt6-tools' 'kdialog' 'xorg-xdpyinfo'
+depends=('bash' 'jq' 'util-linux' 'qt6-tools' 'kdialog' 'xorg-xdpyinfo' 'xorg-xprop'
          'glibc' 'libx11' 'libdecor' 'libdrm' 'libepoxy' 'libglvnd' 'libtirpc'
          'libxau' 'libxcvt' 'libxfont2' 'libxshmfence' 'mesa' 'nettle' 'pixman'
          'wayland>=1.26.0' 'xorg-server-common')
@@ -48,9 +48,9 @@ package() {
     install -Dm644 "$srcdir/xwayland-$_xwaylandver/COPYING" "$pkgdir/usr/share/licenses/$pkgname/Xwayland-COPYING"
     install -Dm644 "$srcdir/RuneLite-LICENSE" "$pkgdir/usr/share/licenses/$pkgname/RuneLite-LICENSE"
 }
-sha256sums+=('3f8fe851c2d7731ac0f551af455d0f5b3d9dfc280415f4720e09252c860a7535')
-sha256sums+=('edf56cea61604a1dfefcaf279c230cc76087c3c7401122a67a093c10944cc444')
-sha256sums+=('40489f904a8a9076783719285a4948b385cf9c9a9a917e4a0680de41e23b5769')
+sha256sums+=('89ab399d68c551e0e259791c8a5f6dd53422231326af6240541fbffa345069ef')
+sha256sums+=('2c842a71d2901553eaca5485263cf35efa7b7c43d72b131191d2f37b1d23e6fc')
+sha256sums+=('fa3a5d14a58e7bd43b008013562759cd3bad2b231ee6e6fc5213f8d928107538')
 sha256sums+=('81cb6ce7d8c4b9154e9840ab9d2938d0e6234f227049f004cacf90724f95cc11')
 sha256sums+=('ae06ee6dbbacfdd1298271c14bb630b434a34e3e434bc46d05b0301b318adac8')
 sha256sums+=('dd35829a586785621651857262168bd91374a84669592d2db28520648b55a519')
