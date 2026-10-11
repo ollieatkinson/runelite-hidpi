@@ -1,20 +1,22 @@
-# RuneLite HiDPI for KDE Wayland
+# RuneLite HiDPI
 
-An experimental CachyOS/Arch package that scales the **entire RuneLite window**:
-sidebar, game, text and custom title bar. Native Java renders at 2× into a private
-Xwayland; KDE presents it at your desktop scale, such as 125% or 150%.
+A workaround for RuneLite being too small on KDE Wayland with fractional scaling.
+Built and used on CachyOS at 125% desktop scale.
 
-It launches your installed Jagex Launcher and stock RuneLite, sharing your normal
-`~/.runelite` settings, plugins, screenshots and account session. Neither AppImage
-nor the system Xwayland is replaced. Stretched Mode is not required.
+It starts a private, patched Xwayland server with a 2× backing buffer. RuneLite
+renders at 2× and KDE downsamples the whole window to your desktop scale. This
+includes the game, sidebar and RuneLite title bar, without using Stretched Mode.
 
-## Try it
+It uses your installed Linux Jagex Launcher and RuneLite AppImages, with your
+normal account and `~/.runelite` folder. It doesn't replace either AppImage or
+the system Xwayland.
 
-Requires **KDE Wayland on Arch/CachyOS**, a working native Linux Jagex Launcher,
-and its installed RuneLite. Quit Jagex Launcher before switching launch routes;
-existing RuneLite clients can stay open.
+## Install
 
-```bash
+For Arch/CachyOS with KDE Wayland. Install RuneLite through Jagex Launcher first.
+This repo is private, so you'll need access to clone it.
+
+```sh
 sudo pacman -S --needed base-devel git
 git clone https://github.com/ollieatkinson/runelite-hidpi.git
 cd runelite-hidpi
@@ -22,68 +24,49 @@ makepkg -si
 runelite-hidpi --setup "$HOME/Applications/jagex-launcher-beta-linux-x86_64.AppImage"
 ```
 
-Adjust the last path to your actual Jagex AppImage. This repository is currently
-private, so cloning requires access. `makepkg` installs declared dependencies and
-builds the pinned Xwayland source with a checked patch. No pip, virtualenv or
-Python project scripts are used; Meson is managed by pacman.
+Use the actual path to your Jagex AppImage in the last command.
 
-Open **Jagex Launcher (RuneLite HiDPI)** in the application menu, select RuneLite
-and click Play. **Jagex Launcher (native)** gives the ordinary launch route.
-The launcher-owned shortcut may also appear; our independent shortcuts survive
-its rewrites. Updates take effect after closing the HiDPI client and launcher.
+Quit Jagex Launcher, then open **Jagex Launcher (RuneLite HiDPI)** from your
+application menu and click Play. There's also a **Jagex Launcher (native)**
+shortcut for launching normally. Existing RuneLite clients can stay open.
 
-For whole-window fractional scaling, KDE's X11 setting should be **Apply scaling
-themselves**. Check your current setting first: system scaling can add blur or
-another scaling pass. The installer never changes desktop settings. The measured
-reference setup used KDE at 125%, integer 2× backing and Java device transform 2×.
-Other desktop scales and mixed-scale monitor moves are not validated.
+In KDE's Display Configuration, use **Apply scaling themselves** for X11 apps.
+The wrapper doesn't change this setting. Keep RuneLite's custom window chrome
+enabled if you want its title bar and buttons.
 
-Keep RuneLite's custom window chrome enabled for its title bar and controls.
-“Keep game size” expands the outer window when the sidebar opens, provided the
-window is not maximized. The wrapper remembers normal window dimensions.
+## Rough edges
 
-## Limits
+- One RuneLite client per HiDPI launch.
+- Normal window size is remembered; position isn't.
+- “Keep game size” works with the sidebar when the window isn't maximized.
+  KDE may move the window if it grows past the screen edge.
+- Use RuneLite's close button. Closing the outer window through KDE can bypass
+  RuneLite's exit confirmation.
+- Dialogs and menus stay inside the outer window. Clipboard, tray behaviour and
+  moving between monitors with different scales haven't been fully checked.
+- Resizing may still briefly flicker. Gameplay performance hasn't been benchmarked.
 
-This is a workaround with a small **patched private Xwayland**, not a RuneLite
-plugin or a native Wayland backend. There is still an upstream patch to maintain;
-packaging makes its version, build and removal explicit.
+This still needs a small Xwayland patch. It isn't a RuneLite plugin or a native
+Wayland backend. `PKGBUILD` pins the Xwayland version and pacman manages the
+dependencies. The launcher is Bash; the window manager is C. Source is in `src/`.
 
-- One RuneLite client per HiDPI environment. Native clients can run separately.
-- Desktop position is not restored; KDE may reposition windows near screen edges.
-- Closing RuneLite through its own close button is normal. Closing the outer host
-  through KDE/Alt+F4 can bypass RuneLite's exit confirmation.
-- Dialogs and menus are confined to the host surface. Clipboard, tray behaviour,
-  external helper windows and mixed-scale monitors need more testing.
-- Larger backing buffers cost GPU work. Gameplay performance and input latency
-  have not been benchmarked. The user has played successfully with this route.
-- The resize patch preserves backing pixels in regression tests; remaining
-  in-game flicker needs visual confirmation.
+## Update
 
-## Update or remove
-
-```bash
+```sh
 git pull --ff-only
 makepkg -fsi
 ```
 
-To remove our shortcuts and package, preserving account/profile data:
+Close the HiDPI client and launcher before relaunching to use the update.
 
-```bash
+## Remove
+
+```sh
 runelite-hidpi --undo
 sudo pacman -R runelite-hidpi
 ```
 
-Configuration lives in `~/.config/runelite-hidpi/`; saved sizes and private logs
-in `~/.local/state/runelite-hidpi/`. **Do not share `launcher-private.log`**: it can
-contain account information. No account data is part of this repository.
-
-## Source
-
-`PKGBUILD` pins Xwayland 24.1.14 and its SHA-256; pacman manages runtime/build
-dependencies. Project source and assets live in `src/`: Bash launcher, minimal
-C window manager, Xwayland patch and icon. The icon comes from the official
-RuneLite AppImage; its required licence notice and Xwayland's upstream licence
-are included in the installed package.
-
-Historical experiments, tests and handoff notes are local-only under `.local/`;
-they are not needed to build or install.
+Your account and RuneLite settings are left alone. The wrapper keeps its config
+in `~/.config/runelite-hidpi/` and saved sizes/logs in
+`~/.local/state/runelite-hidpi/`. Don't share `launcher-private.log`; it may
+contain account information.
