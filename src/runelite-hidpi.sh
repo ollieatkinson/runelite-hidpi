@@ -27,35 +27,22 @@ case ${1:-} in
         mkdir -p "$config" "$apps"
         printf '%s\n' "$app" > "$config/launcher"
         executable=$(realpath -- "$0")
-        for mode in hidpi native; do
-            if [[ $mode == hidpi ]]; then
-                name='Jagex Launcher (RuneLite HiDPI)'; target=$executable
-                filename=jagex-launcher-runelite-hidpi.desktop
-            else
-                name='Jagex Launcher (native)'; target=$app
-                filename=jagex-launcher-native.desktop
-            fi
-            {
-                printf '[Desktop Entry]\nType=Application\nName=%s\nExec=' "$name"
-                desktop_quote "$target"
-                printf ' %%U\nIcon=runelite-hidpi\nCategories=Game;\nTerminal=false\n'
-            } > "$apps/$filename"
-            chmod 644 "$apps/$filename"
-        done
+        {
+            printf '[Desktop Entry]\nType=Application\nName=Jagex Launcher (RuneLite HiDPI)\nExec='
+            desktop_quote "$executable"
+            printf ' %%U\nIcon=runelite-hidpi\nCategories=Game;\nTerminal=false\n'
+        } > "$apps/jagex-launcher-runelite-hidpi.desktop"
+        chmod 644 "$apps/jagex-launcher-runelite-hidpi.desktop"
         # Replace the former user-local identity entry so it cannot shadow the package.
         if [[ -f $apps/net.runelite.RuneLite.HiDPI.desktop ]]; then
             cp "$libdir/net.runelite.RuneLite.HiDPI.desktop" "$apps/net.runelite.RuneLite.HiDPI.desktop"
         fi
-        printf 'Configured %s\nUse Jagex Launcher (RuneLite HiDPI) or Jagex Launcher (native).\n' "$app"
+        printf 'Configured %s\nUse Jagex Launcher (RuneLite HiDPI).\n' "$app"
         exit 0;;
     --undo)
         for file in jagex-launcher-runelite-hidpi.desktop jagex-launcher-native.desktop net.runelite.RuneLite.HiDPI.desktop; do
             rm -f -- "$apps/$file"
         done
-        # Undo the older installer's hiding of the launcher-owned entry.
-        if [[ -f $apps/jagex-launcher.desktop ]]; then
-            sed -i '/^NoDisplay=true$/d' "$apps/jagex-launcher.desktop"
-        fi
         printf 'Removed our user shortcuts. Profiles, configuration and saved sizes retained.\n'
         exit 0;;
     --help)
