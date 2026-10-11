@@ -23,11 +23,6 @@ runelite-hidpi --setup /path/to/Jagex.AppImage
 Quit Jagex Launcher, then open **Jagex Launcher (RuneLite HiDPI)** and click Play.
 Use **Jagex Launcher** for the normal launch route.
 
-The HiDPI shortcut follows the AppImage location in the normal Jagex desktop
-entry on each launch, so updates that replace or relocate the launcher do not
-require setup again. The path supplied to `--setup` is a fallback when that
-entry is unavailable.
-
 Set KDE's X11 scaling to **Apply scaling themselves** and enable RuneLite's
 custom window chrome.
 
