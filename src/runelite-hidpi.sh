@@ -121,9 +121,9 @@ trap 'exit 143' TERM
 for log in server.log wm.log launcher-private.log; do : > "$state/$log"; chmod 600 "$state/$log"; done
 export RUNELITE_HIDPI_APP_ID=net.runelite.RuneLite.HiDPI
 if [[ ${RUNELITE_HIDPI_DEBUG:-0} == 1 ]]; then
-    WAYLAND_DEBUG=1 "$libdir/Xwayland" "$display" -geometry "$geometry" -hidpi -nolisten tcp 9>&- >"$state/server.log" 2>&1 &
+    WAYLAND_DEBUG=1 "$libdir/Xwayland" "$display" -geometry "$geometry" -hidpi -clipboard -nolisten tcp 9>&- >"$state/server.log" 2>&1 &
 else
-    "$libdir/Xwayland" "$display" -geometry "$geometry" -hidpi -nolisten tcp 9>&- >"$state/server.log" 2>&1 &
+    "$libdir/Xwayland" "$display" -geometry "$geometry" -hidpi -clipboard -nolisten tcp 9>&- >"$state/server.log" 2>&1 &
 fi
 server_pid=$!
 client_environment "$display"
