@@ -4,31 +4,28 @@
 [[ ${SRCDEST:-$startdir} != "$startdir" ]] || SRCDEST="$startdir/src"
 pkgname=runelite-hidpi
 pkgver=0.1.0
-pkgrel=12
+pkgrel=13
 pkgdesc='Experimental whole-window RuneLite HiDPI bridge for KDE Wayland'
 arch=('x86_64')
 url='https://github.com/ollieatkinson/runelite-hidpi'
 license=('MIT' 'BSD-2-Clause')
-_xwaylandver=24.1.14
+_xwaylandver=26.0.99.903
 depends=('bash' 'jq' 'util-linux' 'qt6-tools' 'kdialog' 'xorg-xdpyinfo'
          'glibc' 'libx11' 'libdecor' 'libdrm' 'libepoxy' 'libglvnd' 'libtirpc'
          'libxau' 'libxcvt' 'libxfont2' 'libxshmfence' 'mesa' 'nettle' 'pixman'
-         'wayland' 'xorg-server-common')
+         'wayland>=1.26.0' 'xorg-server-common')
 makedepends=('meson' 'ninja' 'libxkbfile' 'xorgproto' 'xorg-font-util'
              'xtrans>=1.6.0' 'wayland-protocols>=1.49')
 source=("https://www.x.org/releases/individual/xserver/xwayland-$_xwaylandver.tar.xz"
         "xwayland.patch::file://${startdir}/src/xwayland.patch" "nested-wm.c::file://${startdir}/src/nested-wm.c"
         "runelite-hidpi.sh::file://${startdir}/src/runelite-hidpi.sh" "runelite.png::file://${startdir}/src/runelite.png"
         "net.runelite.RuneLite.HiDPI.desktop::file://${startdir}/src/net.runelite.RuneLite.HiDPI.desktop"
-        "RuneLite-LICENSE::file://${startdir}/src/RuneLite-LICENSE"
-        "clipboard.patch::file://${startdir}/src/clipboard.patch")
-sha256sums=('4eb6b98d678299a4b96138d886345b294130695760345ef84596225a8224078a')
+        "RuneLite-LICENSE::file://${startdir}/src/RuneLite-LICENSE")
+sha256sums=('fa07af573ff6e6f4b4a656c958b16ee77cafeb28189a8c7a4f384284165b020b')
 # Local sources are checked against the hashes below, updated when source changes.
 
 prepare() {
     cd "$srcdir/xwayland-$_xwaylandver"
-    # Rootful selection bridge from upstream MR 2139, adapted to 24.1.14.
-    patch -Np1 -i "$srcdir/clipboard.patch"
     patch -Np1 -i "$srcdir/xwayland.patch"
 }
 
@@ -51,10 +48,9 @@ package() {
     install -Dm644 "$srcdir/xwayland-$_xwaylandver/COPYING" "$pkgdir/usr/share/licenses/$pkgname/Xwayland-COPYING"
     install -Dm644 "$srcdir/RuneLite-LICENSE" "$pkgdir/usr/share/licenses/$pkgname/RuneLite-LICENSE"
 }
-sha256sums+=('02593be86e1c4920c8710c698edce26fc2a577588994119a85889b9ca3071315')
+sha256sums+=('3f8fe851c2d7731ac0f551af455d0f5b3d9dfc280415f4720e09252c860a7535')
 sha256sums+=('edf56cea61604a1dfefcaf279c230cc76087c3c7401122a67a093c10944cc444')
 sha256sums+=('cb40db080690b8694dfd4060d337bba3aa75f8102ce1effbc7e600b94b62dbec')
 sha256sums+=('81cb6ce7d8c4b9154e9840ab9d2938d0e6234f227049f004cacf90724f95cc11')
 sha256sums+=('ae06ee6dbbacfdd1298271c14bb630b434a34e3e434bc46d05b0301b318adac8')
 sha256sums+=('dd35829a586785621651857262168bd91374a84669592d2db28520648b55a519')
-sha256sums+=('e246f5cab9d1eaaf80439e501fa30a075a970d6101fa74845661203f0327d38e')

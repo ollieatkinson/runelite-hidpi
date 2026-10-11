@@ -10,7 +10,7 @@ Uses the stock Linux Jagex Launcher and RuneLite, sharing your account and
 
 Text copy/paste works between RuneLite and the desktop using Xwayland's
 [upstream clipboard bridge](https://gitlab.freedesktop.org/xorg/xserver/-/merge_requests/2139),
-backported to the packaged version and enabled with `-clipboard`.
+enabled with `-clipboard`. The package uses Xwayland 26.0.99.903 (26.1 RC3).
 
 ## Install
 
