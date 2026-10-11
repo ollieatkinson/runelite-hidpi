@@ -30,6 +30,7 @@ enum AtomIndex {
     NET_WM_STATE_MAXIMIZED_VERT,
     NET_WM_MOVERESIZE,
     NET_WM_NAME,
+    NET_WM_PID,
     NET_FRAME_EXTENTS,
     NET_ACTIVE_WINDOW,
     NET_SUPPORTED,
@@ -50,6 +51,7 @@ static char *atom_names[ATOM_COUNT] = {
     [NET_WM_STATE_MAXIMIZED_VERT] = "_NET_WM_STATE_MAXIMIZED_VERT",
     [NET_WM_MOVERESIZE] = "_NET_WM_MOVERESIZE",
     [NET_WM_NAME] = "_NET_WM_NAME",
+    [NET_WM_PID] = "_NET_WM_PID",
     [NET_FRAME_EXTENTS] = "_NET_FRAME_EXTENTS",
     [NET_ACTIVE_WINDOW] = "_NET_ACTIVE_WINDOW",
     [NET_SUPPORTED] = "_NET_SUPPORTED",
@@ -232,7 +234,17 @@ static void handle_map_request(const XMapRequestEvent *event)
     if (window == client_window) {
         repaint_client();
         XSync(display, False);
-        puts("CLIENT shown");
+        Atom type;
+        int format;
+        unsigned long count, remaining, pid = 0;
+        unsigned char *data = NULL;
+        XGetWindowProperty(display, window, atoms[NET_WM_PID], 0, 1, False,
+                           XA_CARDINAL, &type, &format, &count, &remaining, &data);
+        if (data && type == XA_CARDINAL && format == 32 && count == 1)
+            pid = *(unsigned long *)data;
+        if (data)
+            XFree(data);
+        printf("CLIENT shown %lu\n", pid);
     }
 }
 

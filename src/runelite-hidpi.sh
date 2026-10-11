@@ -61,12 +61,17 @@ client_environment() {
     export DISPLAY=$1 _JAVA_AWT_WM_NONREPARENTING=1
     export RUNELITE_VMARGS="${RUNELITE_VMARGS:-} -Dsun.java2d.uiScale=2"
 }
+publish_launcher_pid() {
+    printf '%s\n' "$1" > "$state/launcher.pid.tmp"
+    mv -- "$state/launcher.pid.tmp" "$state/launcher.pid"
+}
 if ! flock -n 9; then
     jq -e '.trial == false' "$state/active.json" >/dev/null 2>&1 || fail 'HiDPI launcher is starting or uses an isolated trial profile. Close it before switching routes.'
     pid=$(jq -er '.server_pid | select(type=="number")' "$state/active.json" 2>/dev/null) || fail 'HiDPI launcher is still starting. Try again shortly.'
     display=$(jq -er '.display | select(test("^:[0-9]+$"))' "$state/active.json")
     kill -0 "$pid" 2>/dev/null || fail 'HiDPI launcher is still stopping. Try again shortly.'
     client_environment "$display"
+    publish_launcher_pid "$$"
     exec "$app" --ozone-platform=wayland "$@" 9>&- >/dev/null 2>&1
 fi
 # Electron must not forward Play into a launcher on another display.
@@ -84,6 +89,10 @@ done
 [[ -n $display ]] || fail 'No unused private X11 display.'
 geometry=$(jq -er 'select(.width>=320 and .width<=16383 and .height>=200 and .height<=16383) | "\(.width|floor)x\(.height|floor)"' "$state/window.json" 2>/dev/null) || geometry=1557x762
 server_pid='' wm_pid='' watcher_pid='' launcher_pid=''
+publish_client() {
+    jq -n --argjson present "$1" --argjson pid "$2" '{present:$present,pid:$pid}' > "$state/client.json.tmp"
+    mv -- "$state/client.json.tmp" "$state/client.json"
+}
 host_visibility() {
     local visible=$1 center=${2:-0} persistent=${3:-0} width=${4:-0} height=${5:-0} script="$state/window-$server_pid.js" name="runelite-hidpi-window-$server_pid" operations id
     if [[ $visible == 1 ]]; then
@@ -115,7 +124,7 @@ cleanup() {
         timeout 5 qdbus6 org.kde.KWin /Scripting org.kde.kwin.Scripting.unloadScript "runelite-hidpi-window-$server_pid" >/dev/null 2>&1 || :
         rm -f -- "$state/window-$server_pid.js"
     fi
-    rm -f -- "$state/active.json" "$state/wm.pipe" "$state/server.pipe" "$state/client-present"
+    rm -f -- "$state/active.json" "$state/wm.pipe" "$state/server.pipe" "$state/client-present" "$state/client.json" "$state/client.json.tmp" "$state/launcher.pid" "$state/launcher.pid.tmp"
 }
 trap cleanup EXIT
 trap 'exit 130' INT
@@ -149,7 +158,7 @@ timeout 5 qdbus6 org.kde.KWin /Scripting org.kde.kwin.Scripting.unloadScript "ru
 host_visibility 0
 rm -f -- "$state/wm.pipe"
 mkfifo "$state/wm.pipe"
-printf '0\n' > "$state/client-present"
+publish_client false 0
 (
     maximized=0
     visible=0
@@ -157,6 +166,7 @@ printf '0\n' > "$state/client-present"
     handoff=0
     startup=1
     center_pending=0
+    client_pid=0
     while true; do
         # The splash closes just before the main window maps. Keep the host
         # visible through that handoff instead of minimizing and restoring it.
@@ -165,7 +175,7 @@ printf '0\n' > "$state/client-present"
                 host_visibility 0
                 visible=0
                 startup=1
-                printf '0\n' > "$state/client-present"
+                publish_client false "$client_pid"
                 continue
             fi
         else
@@ -186,7 +196,12 @@ printf '0\n' > "$state/client-present"
                 fi;;
             'CLIENT '*)
                 if [[ $line == *shown* ]]; then present=1; else present=0; handoff=1; fi
-                if [[ $present == 1 ]]; then printf '1\n' > "$state/client-present"; fi
+                if [[ $present == 1 ]]; then
+                    if [[ $line =~ ^CLIENT\ shown\ ([0-9]+)$ && ${BASH_REMATCH[1]} != 0 ]]; then
+                        client_pid=${BASH_REMATCH[1]}
+                    fi
+                    publish_client true "$client_pid"
+                fi
                 if [[ $present == 1 && $visible == 0 ]]; then
                     center_pending=1
                     host_visibility 1
@@ -198,7 +213,7 @@ printf '0\n' > "$state/client-present"
                     host_visibility 0
                     visible=0
                     startup=1
-                    printf '0\n' > "$state/client-present"
+                    publish_client false "$client_pid"
                 fi
                 if [[ $present == 1 ]]; then handoff=0; fi;;
         esac
@@ -209,11 +224,16 @@ watcher_pid=$!
 wm_pid=$!
 setsid "$app" --ozone-platform=wayland "$@" 9>&- > "$state/launcher-private.log" 2>&1 &
 launcher_pid=$!
+publish_launcher_pid "$launcher_pid"
 jq -n --argjson server_pid "$server_pid" --arg display "$display" '{server_pid:$server_pid,display:$display,trial:false}' > "$state/active.json"
 printf 'Jagex launcher opened. Select RuneLite and click Play.\nNormal ~/.runelite; 2x backing, KDE desktop output scale.\n'
 while kill -0 "$server_pid" 2>/dev/null; do
     kill -0 "$wm_pid" 2>/dev/null || fail 'Private window manager exited.'
-    present=$(cat "$state/client-present")
-    if ! kill -0 "$launcher_pid" 2>/dev/null && [[ $present != 1 ]]; then break; fi
+    read -r client_pid present < <(jq -r '[.pid,.present] | @tsv' "$state/client.json")
+    IFS= read -r current_launcher_pid < "$state/launcher.pid"
+    if ! kill -0 "$current_launcher_pid" 2>/dev/null && [[ $present != true ]]; then
+        # The game can outlive its launcher, including periods with no mapped window.
+        if [[ $client_pid == 0 ]] || ! kill -0 "$client_pid" 2>/dev/null; then break; fi
+    fi
     sleep .5
 done
