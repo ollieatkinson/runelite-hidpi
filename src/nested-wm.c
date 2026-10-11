@@ -194,6 +194,8 @@ static void handle_map_request(const XMapRequestEvent *event)
         XChangeProperty(display, window, atoms[NET_FRAME_EXTENTS], XA_CARDINAL, 32,
                         PropModeReplace, (unsigned char *)extents, 4);
         XSelectInput(display, window, PropertyChangeMask);
+        XGrabButton(display, Button1, AnyModifier, window, False,
+                    ButtonPressMask, GrabModeSync, GrabModeAsync, None, None);
         sync_host_state();
         sync_title();
         sync_chrome();
@@ -221,6 +223,36 @@ static bool left_button_pressed(void)
     unsigned mask;
     return XQueryPointer(display, root_window, &root, &child,
                          &root_x, &root_y, &window_x, &window_y, &mask) && (mask & Button1Mask);
+}
+
+static void handle_button_press(const XButtonEvent *event)
+{
+    /* Hand border drags to the host: the nested screen ends at this border. */
+    const int border = 8;
+    XSizeHints hints;
+    long supplied;
+    unsigned edge = 0;
+    bool fixed = XGetWMNormalHints(display, client_window, &hints, &supplied) &&
+                 (hints.flags & PMinSize) && (hints.flags & PMaxSize) &&
+                 hints.min_width == hints.max_width && hints.min_height == hints.max_height;
+
+    if (event->window == client_window && event->button == Button1 && !maximized && !fixed) {
+        if (event->x < border)
+            edge |= 4;
+        else if (event->x >= root_width - border)
+            edge |= 8;
+        if (event->y < border)
+            edge |= 1;
+        else if (event->y >= root_height - border)
+            edge |= 2;
+    }
+
+    if (edge) {
+        XUngrabPointer(display, event->time);
+        send_host_action(HOST_RESIZE, edge, 0);
+    } else {
+        XAllowEvents(display, ReplayPointer, event->time);
+    }
 }
 
 static void handle_configure_request(const XConfigureRequestEvent *event)
@@ -336,6 +368,9 @@ int main(void)
             break;
         case ClientMessage:
             handle_client_message(&event.xclient);
+            break;
+        case ButtonPress:
+            handle_button_press(&event.xbutton);
             break;
         case ConfigureNotify:
             if (event.xconfigure.window == root_window) {
