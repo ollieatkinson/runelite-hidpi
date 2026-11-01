@@ -44,7 +44,23 @@ retain compositor scaling. GPU readback and CPU
 filtering may reduce gameplay performance; this is a visual test, not a GPU
 optimization. Window controls and sizing use the existing bridge.
 
-There is no filter-selection CLI or running-instance filter check. To return to
+An optional GPU path uses the same Pixman convolution weights in two shader
+passes, preserving the 2× Java backing and monitor-sized output without reading
+each frame back to the CPU:
+
+```sh
+RUNELITE_HIDPI_BICUBIC=1 RUNELITE_HIDPI_BICUBIC_GPU=1 runelite-hidpi
+```
+
+Build and install the updated package first; the earlier local prototype does
+not include this path. GPU presentation requires Glamor, DMA-BUF buffers and
+implicit synchronization support. Unsupported configurations retain CPU bicubic.
+Presentation buffers are reused only after the compositor releases them.
+To check activation, look for `RuneLite filter bicubic GPU:` in
+`~/.local/state/runelite-hidpi/server.log`. Add `--gpu` to
+`tools/smoke-filters.py` to require GPU filtering in the isolated window tests.
+
+There is no filter-selection CLI. To return to
 the original path, close the client and launcher and launch without the environment
 variable. The variable is read when the private Xwayland starts.
 

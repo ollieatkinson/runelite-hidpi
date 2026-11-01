@@ -20,6 +20,7 @@ p = argparse.ArgumentParser(description=__doc__)
 p.add_argument('--private-bus', action='store_true', help=argparse.SUPPRESS)
 p.add_argument('--scale', type=float, default=1.25)
 p.add_argument('--move-scale', type=float, help='Move to a second output at this scale and back')
+p.add_argument('--gpu', action='store_true', help='Require the GPU bicubic path')
 p.add_argument('xwayland', type=Path)
 p.add_argument('wm', type=Path)
 p.add_argument('client', type=Path)
@@ -80,7 +81,12 @@ with tempfile.TemporaryDirectory(prefix='runelite-filter-smoke-') as directory:
             if entry['name'] == 'outputs':
                 for index, output in enumerate(entry['data']):
                     output['scale'] = a.scale if index == 0 else a.move_scale
-                second_x = round(entry['data'][0]['mode']['width'] / a.scale)
+                mode = entry['data'][0]['mode']
+                # KWin 6.8 stores modes as basic/CVT variants.
+                mode_width = mode.get('width') or mode.get('basic', {}).get('width')
+                if mode_width is None:
+                    mode_width = mode['cvt']['hdisplay']
+                second_x = round(mode_width / a.scale)
             if entry['name'] == 'setups' and a.move_scale:
                 for setup in entry['data']:
                     setup['outputs'][1]['position']['x'] = second_x
@@ -91,8 +97,11 @@ with tempfile.TemporaryDirectory(prefix='runelite-filter-smoke-') as directory:
                 raise RuntimeError(f'Test display :{number} is occupied')
             client_env = dict(env, DISPLAY=f':{number}', WAYLAND_DEBUG='1')
             client_env.pop('RUNELITE_HIDPI_BICUBIC', None)
+            client_env.pop('RUNELITE_HIDPI_BICUBIC_GPU', None)
             if method == 'bicubic':
                 client_env['RUNELITE_HIDPI_BICUBIC'] = '1'
+                if a.gpu:
+                    client_env['RUNELITE_HIDPI_BICUBIC_GPU'] = '1'
             server = start([str(a.xwayland.resolve()), client_env['DISPLAY'], '-geometry', '800x500',
                             '-hidpi', '-nolisten', 'tcp'], method, client_env)
             for _ in range(100):
@@ -117,15 +126,24 @@ with tempfile.TemporaryDirectory(prefix='runelite-filter-smoke-') as directory:
             log = (a.logs/(method+'.log')).read_text()
             if method != 'compositor':
                 assert f'preferred_scale({round(a.scale * 120)})' in log, 'Requested output scale was not established'
-                assert 'RuneLite bicubic: CPU, using monitor preferred scale' in log, 'Bicubic did not activate'
+                if a.gpu:
+                    marker = 'RuneLite filter bicubic GPU:'
+                    assert marker in log, 'GPU bicubic did not activate'
+                    assert 'GPU filter unavailable' not in log, 'GPU filtering failed'
+                    # Initial surface configuration can precede GPU readiness.
+                    assert 'RuneLite bicubic: CPU' not in log[log.rindex(marker):], 'CPU fallback after GPU presentation'
+                else:
+                    assert 'RuneLite bicubic: CPU, using monitor preferred scale' in log, 'Bicubic did not activate'
                 backing = 2  # Explicitly matches the launcher's Java render scale.
                 width, height = round(800*a.scale/backing), round(400*a.scale/backing)
-                assert f'{width}, {height}, {width*4}' in log, 'Expected scaled SHM output buffer'
+                expected = f'-> {width}x{height}' if a.gpu else f'{width}, {height}, {width*4}'
+                assert expected in log, 'Expected scaled output buffer'
                 if a.move_scale:
                     first, second = f'preferred_scale({round(a.scale*120)})', f'preferred_scale({round(a.move_scale*120)})'
                     assert second in log and first in log[log.index(second)+len(second):], 'Output move and return did not change scale'
                     width, height = round(800*a.move_scale/backing), round(400*a.move_scale/backing)
-                    assert f'{width}, {height}, {width*4}' in log, 'Second output buffer did not follow its scale'
+                    expected = f'-> {width}x{height}' if a.gpu else f'{width}, {height}, {width*4}'
+                    assert expected in log, 'Second output buffer did not follow its scale'
                 assert 'wl_buffer' in log and '.release()' in log, method + ' did not release buffers'
             assert 'protocol error' not in log, method + ' protocol error'
             print(f'{method} at {a.scale:g}x: PASS', flush=True)

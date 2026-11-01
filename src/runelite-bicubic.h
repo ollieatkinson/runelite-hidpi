@@ -1,5 +1,6 @@
 /* Opt-in Pixman/SHM prototype: backing -> monitor scale. */
 #include <pixman.h>
+#include "runelite-bicubic-gpu.h"
 struct runelite_frame { struct xorg_list link; PixmapPtr pixmap; };
 
 static pixman_format_code_t runelite_bicubic_format(ScreenPtr screen, int depth)
@@ -47,6 +48,8 @@ static Bool runelite_bicubic_attach(struct xwl_window *w)
     if (!w->runelite_scale ||
         !s->viewporter || !w->fractional_scale || !format)
         goto done;
+    if (runelite_filter_attach(w) == 1)
+        return TRUE;
     /* Wayland reports scale in units of 1/120, not percent. */
     double ratio = w->runelite_scale / (120.0 * s->global_surface_scale);
     width = max(1, lround(source->drawable.width * ratio));
