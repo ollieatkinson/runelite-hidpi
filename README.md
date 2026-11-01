@@ -26,6 +26,28 @@ Use **Jagex Launcher** for the normal launch route.
 Set KDE's X11 scaling to **Apply scaling themselves** and enable RuneLite's
 custom window chrome.
 
+## Local bicubic experiment
+
+Close the HiDPI client and launcher, then run the locally built prototype:
+
+```sh
+RUNELITE_HIDPI_BICUBIC=1 ./.local/filter-test/bin/runelite-hidpi
+```
+
+This uses Pixman's cubic filter on the CPU, with Xwayland's shared-memory buffer
+helpers. The backing stays at 2× to match Java's render scale; the output uses the
+monitor's reported fractional scale, updating when the window moves between monitors.
+Source pixel layout is checked against the root visual, including RGB/BGR and alpha.
+The output uses standard 8-bit RGB/ARGB shared-memory buffers (not an HDR pipeline).
+Requires the fractional-scale/viewporter protocols; unsupported configurations
+retain compositor scaling. GPU readback and CPU
+filtering may reduce gameplay performance; this is a visual test, not a GPU
+optimization. Window controls and sizing use the existing bridge.
+
+There is no filter-selection CLI or running-instance filter check. To return to
+the original path, close the client and launcher and launch without the environment
+variable. The variable is read when the private Xwayland starts.
+
 ## Rough edges
 
 - One RuneLite client per HiDPI launch.

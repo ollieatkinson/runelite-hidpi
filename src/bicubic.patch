@@ -1,0 +1,121 @@
+--- a/hw/xwayland/xwayland-screen.c
++++ b/hw/xwayland/xwayland-screen.c
+@@ -873,7 +873,8 @@
+         return FALSE;
+ 
+     old_scale = xwl_screen->global_surface_scale;
+-    xwl_screen->global_surface_scale = xwl_window_get_max_output_scale(xwl_window);
++    /* Match the launcher's Java uiScale=2; monitor scale is applied at presentation. */
++    xwl_screen->global_surface_scale = getenv("RUNELITE_HIDPI_BICUBIC") ? 2 : xwl_window_get_max_output_scale(xwl_window);
+ 
+     return (xwl_screen->global_surface_scale != old_scale);
+ }
+--- a/hw/xwayland/xwayland-window.c
++++ b/hw/xwayland/xwayland-window.c
+@@ -58,6 +58,8 @@
+ #include "fractional-scale-v1-client-protocol.h"
+ #include "linux-drm-syncobj-v1-client-protocol.h"
+ 
++#include "runelite-bicubic.h"
++
+ #define DELAYED_WL_SURFACE_DESTROY 1000 /* ms */
+ 
+ #define MAX_ROOTFUL_WIDTH 32767
+@@ -927,7 +929,7 @@
+     mode = xwl_output_find_mode(xwl_output, round(width / scale), round(height / scale));
+     xwl_output_set_mode_fixed(xwl_output, mode);
+ 
+-    xwl_window_attach_buffer(xwl_window);
++    if (!getenv("RUNELITE_HIDPI_BICUBIC")) xwl_window_attach_buffer(xwl_window);
+ }
+ 
+ #ifdef XWL_HAS_LIBDECOR
+@@ -1072,7 +1074,7 @@
+         new_width = xwl_screen->width / previous_scale * new_scale;
+         new_height = xwl_screen->height / previous_scale * new_scale;
+ 
+-        wl_surface_set_buffer_scale(xwl_window->surface, xwl_screen->global_surface_scale);
++        wl_surface_set_buffer_scale(xwl_window->surface, xwl_window->runelite_viewport ? 1 : xwl_screen->global_surface_scale);
+         /* Reflect the scale factor using XRandR transform */
+         xwl_output_set_xscale(xwl_screen->fixed_output, new_scale);
+         xwl_window_maybe_resize(xwl_window, new_width, new_height);
+@@ -1293,6 +1295,11 @@
+     struct xwl_screen *xwl_screen = xwl_window->xwl_screen;
+     double previous_scale = xwl_window_get_fractional_scale_factor(xwl_window);
+ 
++    if (!xwl_screen->rootless && xwl_screen->hidpi && getenv("RUNELITE_HIDPI_BICUBIC")) {
++        xwl_window->runelite_scale = scale_numerator;
++        DamageDamageRegion(&xwl_window->surface_window->drawable, &xwl_window->surface_window->winSize);
++        return;
++    }
+     if (xwl_window_update_fractional_scale(xwl_window, scale_numerator)) {
+         if (xwl_screen->fixed_output) { /* We're running rootful */
+             xwl_window_update_rootful_scale(xwl_window, previous_scale);
+@@ -1401,7 +1408,8 @@
+     wl_surface_add_listener(xwl_window->surface,
+                             &surface_listener, xwl_window);
+ 
+-    if (xwl_screen_should_use_fractional_scale(xwl_screen)) {
++    if (xwl_screen_should_use_fractional_scale(xwl_screen) ||
++        (xwl_screen->hidpi && xwl_screen->fractional_scale_manager && getenv("RUNELITE_HIDPI_BICUBIC"))) {
+         xwl_window->fractional_scale =
+             wp_fractional_scale_manager_v1_get_fractional_scale(xwl_screen->fractional_scale_manager,
+                                                                 xwl_window->surface);
+@@ -1550,6 +1558,7 @@
+     xwl_window->xwl_screen = xwl_screen;
+     xwl_window->toplevel = window;
+     xwl_window->surface_window = window;
++    xorg_list_init(&xwl_window->runelite_frames);
+     xwl_window->fractional_scale_numerator = FRACTIONAL_SCALE_DENOMINATOR;
+     xwl_window->viewport_scale_x = 1.0;
+     xwl_window->viewport_scale_y = 1.0;
+@@ -1757,6 +1766,9 @@
+     WindowPtr window = xwl_window->toplevel;
+     ScreenPtr screen = xwl_screen->screen;
+ 
++    struct runelite_frame *frame, *next;
++    xorg_list_for_each_entry_safe(frame, next, &xwl_window->runelite_frames, link)
++        runelite_bicubic_release(frame);
+     compUnredirectWindow(serverClient, window, CompositeRedirectManual);
+ 
+     xorg_list_for_each_entry(xwl_seat, &xwl_screen->seat_list, link) {
+@@ -1788,6 +1800,7 @@
+     if (xwl_window->tearing_control)
+         wp_tearing_control_v1_destroy(xwl_window->tearing_control);
+ 
++    if (xwl_window->runelite_viewport) wp_viewport_destroy(xwl_window->runelite_viewport);
+     if (xwl_window->fractional_scale)
+         wp_fractional_scale_v1_destroy(xwl_window->fractional_scale);
+ 
+@@ -2143,7 +2156,7 @@
+ {
+     assert(!xwl_window->frame_callback);
+ 
+-    if (!xwl_window_attach_buffer(xwl_window))
++    if (!runelite_bicubic_attach(xwl_window) && !xwl_window_attach_buffer(xwl_window))
+         return;
+ 
+     xwl_window_create_frame_callback(xwl_window);
+--- a/hw/xwayland/xwayland-window.h
++++ b/hw/xwayland/xwayland-window.h
+@@ -60,6 +60,9 @@
+     struct wp_viewport *viewport;
+     float viewport_scale_x, viewport_scale_y;
+     int surface_scale;
++    uint32_t runelite_scale;
++    struct wp_viewport *runelite_viewport;
++    struct xorg_list runelite_frames;
+     struct xdg_surface *xdg_surface;
+     struct xdg_toplevel *xdg_toplevel;
+     struct zxdg_toplevel_decoration_v1 *server_decoration;
+--- a/hw/xwayland/xwayland-present.c
++++ b/hw/xwayland/xwayland-present.c
+@@ -748,6 +748,8 @@
+ 
+     if (!xwl_window)
+         return FALSE;
++    if (!xwl_window->xwl_screen->rootless && getenv("RUNELITE_HIDPI_BICUBIC"))
++        return FALSE;
+ 
+     xwl_present_maybe_set_reason(xwl_window, reason);
+ 

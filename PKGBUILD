@@ -4,7 +4,7 @@
 [[ ${SRCDEST:-$startdir} != "$startdir" ]] || SRCDEST="$startdir/src"
 pkgname=runelite-hidpi
 pkgver=0.1.0
-pkgrel=10
+pkgrel=11
 pkgdesc='Experimental whole-window RuneLite HiDPI bridge for KDE Wayland'
 arch=('x86_64')
 url='https://github.com/ollieatkinson/runelite-hidpi'
@@ -20,13 +20,17 @@ source=("https://www.x.org/releases/individual/xserver/xwayland-$_xwaylandver.ta
         "xwayland.patch::file://${startdir}/src/xwayland.patch" "nested-wm.c::file://${startdir}/src/nested-wm.c"
         "runelite-hidpi.sh::file://${startdir}/src/runelite-hidpi.sh" "runelite.png::file://${startdir}/src/runelite.png"
         "net.runelite.RuneLite.HiDPI.desktop::file://${startdir}/src/net.runelite.RuneLite.HiDPI.desktop"
-        "RuneLite-LICENSE::file://${startdir}/src/RuneLite-LICENSE")
+        "RuneLite-LICENSE::file://${startdir}/src/RuneLite-LICENSE"
+        "bicubic.patch::file://${startdir}/src/bicubic.patch"
+        "runelite-bicubic.h::file://${startdir}/src/runelite-bicubic.h")
 sha256sums=('4eb6b98d678299a4b96138d886345b294130695760345ef84596225a8224078a')
 # Local sources are checked against the hashes below, updated when source changes.
 
 prepare() {
     cd "$srcdir/xwayland-$_xwaylandver"
     patch -Np1 -i "$srcdir/xwayland.patch"
+    patch -Np1 -i "$srcdir/bicubic.patch"
+    cp "$srcdir/runelite-bicubic.h" hw/xwayland/
 }
 
 build() {
@@ -48,9 +52,15 @@ package() {
     install -Dm644 "$srcdir/xwayland-$_xwaylandver/COPYING" "$pkgdir/usr/share/licenses/$pkgname/Xwayland-COPYING"
     install -Dm644 "$srcdir/RuneLite-LICENSE" "$pkgdir/usr/share/licenses/$pkgname/RuneLite-LICENSE"
 }
+
+
+
+
 sha256sums+=('02593be86e1c4920c8710c698edce26fc2a577588994119a85889b9ca3071315')
 sha256sums+=('edf56cea61604a1dfefcaf279c230cc76087c3c7401122a67a093c10944cc444')
 sha256sums+=('6ee44c9f0eaba15d6e26d3a72821c730162843fd4a914e1d39e70509fa4acfb8')
 sha256sums+=('81cb6ce7d8c4b9154e9840ab9d2938d0e6234f227049f004cacf90724f95cc11')
 sha256sums+=('ae06ee6dbbacfdd1298271c14bb630b434a34e3e434bc46d05b0301b318adac8')
 sha256sums+=('dd35829a586785621651857262168bd91374a84669592d2db28520648b55a519')
+sha256sums+=('065d135400c3ba58ced19b76e2b7a1afd74a11eaa40337549889bfb65b8a6ba2')
+sha256sums+=('a2bb3fc995ba81738924bf0a24cefe6b1576ad07211c80de011075c22234c17e')
