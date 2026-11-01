@@ -8,7 +8,7 @@ static pixman_format_code_t runelite_bicubic_format(ScreenPtr screen, int depth)
     for (int i = 0; i < screen->numVisuals; i++) {
         VisualPtr v = &screen->visuals[i];
         if (v->vid != screen->rootVisual || v->class != TrueColor) continue;
-        int r = Ones(v->redMask), g = Ones(v->greenMask), b = Ones(v->blueMask);
+        int r = __builtin_popcountl(v->redMask), g = __builtin_popcountl(v->greenMask), b = __builtin_popcountl(v->blueMask);
         Bool rgb = v->redMask > v->blueMask;
         unsigned long low = rgb ? v->blueMask : v->redMask, high = rgb ? v->redMask : v->blueMask;
         int first = rgb ? b : r, last = rgb ? r : b;

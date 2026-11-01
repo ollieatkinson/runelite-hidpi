@@ -30,6 +30,7 @@ enum AtomIndex {
     NET_WM_STATE_MAXIMIZED_VERT,
     NET_WM_MOVERESIZE,
     NET_WM_NAME,
+    NET_WM_PID,
     NET_FRAME_EXTENTS,
     NET_ACTIVE_WINDOW,
     NET_SUPPORTED,
@@ -50,6 +51,7 @@ static char *atom_names[ATOM_COUNT] = {
     [NET_WM_STATE_MAXIMIZED_VERT] = "_NET_WM_STATE_MAXIMIZED_VERT",
     [NET_WM_MOVERESIZE] = "_NET_WM_MOVERESIZE",
     [NET_WM_NAME] = "_NET_WM_NAME",
+    [NET_WM_PID] = "_NET_WM_PID",
     [NET_FRAME_EXTENTS] = "_NET_FRAME_EXTENTS",
     [NET_ACTIVE_WINDOW] = "_NET_ACTIVE_WINDOW",
     [NET_SUPPORTED] = "_NET_SUPPORTED",
@@ -106,6 +108,22 @@ static void fit_client_to_host(void)
     event.xconfigure.above = None;
     event.xconfigure.override_redirect = False;
     XSendEvent(display, client_window, False, StructureNotifyMask, &event);
+}
+
+static void repaint_client(void)
+{
+    if (!client_window)
+        return;
+
+    /* Root backing preservation can restore pixels after the usual exposures. */
+    XEvent event;
+    memset(&event, 0, sizeof(event));
+    event.xexpose.type = Expose;
+    event.xexpose.display = display;
+    event.xexpose.window = client_window;
+    event.xexpose.width = root_width;
+    event.xexpose.height = root_height;
+    XSendEvent(display, client_window, False, ExposureMask, &event);
 }
 
 static void set_wm_state(Window window, long state)
@@ -208,12 +226,26 @@ static void handle_map_request(const XMapRequestEvent *event)
             resize_host(attributes.width, attributes.height);
 
         fit_client_to_host();
-        puts("CLIENT shown");
         XChangeProperty(display, root_window, atoms[NET_ACTIVE_WINDOW], XA_WINDOW, 32,
                         PropModeReplace, (unsigned char *)&window, 1);
     }
     XMapWindow(display, window);
     XSetInputFocus(display, window, RevertToParent, CurrentTime);
+    if (window == client_window) {
+        repaint_client();
+        XSync(display, False);
+        Atom type;
+        int format;
+        unsigned long count, remaining, pid = 0;
+        unsigned char *data = NULL;
+        XGetWindowProperty(display, window, atoms[NET_WM_PID], 0, 1, False,
+                           XA_CARDINAL, &type, &format, &count, &remaining, &data);
+        if (data && type == XA_CARDINAL && format == 32 && count == 1)
+            pid = *(unsigned long *)data;
+        if (data)
+            XFree(data);
+        printf("CLIENT shown %lu\n", pid);
+    }
 }
 
 static bool left_button_pressed(void)
@@ -377,6 +409,7 @@ int main(void)
                 read_root_geometry();
                 fprintf(stderr, "ROOT %dx%d\n", root_width, root_height);
                 fit_client_to_host();
+                repaint_client();
             }
             break;
         case PropertyNotify:

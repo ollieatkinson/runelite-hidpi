@@ -1,6 +1,6 @@
 --- a/hw/xwayland/xwayland-screen.c
 +++ b/hw/xwayland/xwayland-screen.c
-@@ -873,7 +873,8 @@
+@@ -923,7 +923,8 @@
          return FALSE;
  
      old_scale = xwl_screen->global_surface_scale;
@@ -21,16 +21,16 @@
  #define DELAYED_WL_SURFACE_DESTROY 1000 /* ms */
  
  #define MAX_ROOTFUL_WIDTH 32767
-@@ -927,7 +929,7 @@
+@@ -949,7 +951,7 @@
      mode = xwl_output_find_mode(xwl_output, round(width / scale), round(height / scale));
      xwl_output_set_mode_fixed(xwl_output, mode);
  
 -    xwl_window_attach_buffer(xwl_window);
 +    if (!getenv("RUNELITE_HIDPI_BICUBIC")) xwl_window_attach_buffer(xwl_window);
- }
  
- #ifdef XWL_HAS_LIBDECOR
-@@ -1072,7 +1074,7 @@
+     if (xwl_screen->fullscreen)
+         xwl_window_check_resolution_change_emulation(xwl_window);
+@@ -1109,7 +1111,7 @@
          new_width = xwl_screen->width / previous_scale * new_scale;
          new_height = xwl_screen->height / previous_scale * new_scale;
  
@@ -39,7 +39,7 @@
          /* Reflect the scale factor using XRandR transform */
          xwl_output_set_xscale(xwl_screen->fixed_output, new_scale);
          xwl_window_maybe_resize(xwl_window, new_width, new_height);
-@@ -1293,6 +1295,11 @@
+@@ -1333,6 +1335,11 @@
      struct xwl_screen *xwl_screen = xwl_window->xwl_screen;
      double previous_scale = xwl_window_get_fractional_scale_factor(xwl_window);
  
@@ -51,7 +51,7 @@
      if (xwl_window_update_fractional_scale(xwl_window, scale_numerator)) {
          if (xwl_screen->fixed_output) { /* We're running rootful */
              xwl_window_update_rootful_scale(xwl_window, previous_scale);
-@@ -1401,7 +1408,8 @@
+@@ -1440,7 +1447,8 @@
      wl_surface_add_listener(xwl_window->surface,
                              &surface_listener, xwl_window);
  
@@ -61,7 +61,7 @@
          xwl_window->fractional_scale =
              wp_fractional_scale_manager_v1_get_fractional_scale(xwl_screen->fractional_scale_manager,
                                                                  xwl_window->surface);
-@@ -1550,6 +1558,7 @@
+@@ -1591,6 +1599,7 @@
      xwl_window->xwl_screen = xwl_screen;
      xwl_window->toplevel = window;
      xwl_window->surface_window = window;
@@ -69,7 +69,7 @@
      xwl_window->fractional_scale_numerator = FRACTIONAL_SCALE_DENOMINATOR;
      xwl_window->viewport_scale_x = 1.0;
      xwl_window->viewport_scale_y = 1.0;
-@@ -1757,6 +1766,10 @@
+@@ -1798,6 +1807,10 @@
      WindowPtr window = xwl_window->toplevel;
      ScreenPtr screen = xwl_screen->screen;
  
@@ -80,7 +80,7 @@
      compUnredirectWindow(serverClient, window, CompositeRedirectManual);
  
      xorg_list_for_each_entry(xwl_seat, &xwl_screen->seat_list, link) {
-@@ -1788,6 +1801,7 @@
+@@ -1829,6 +1842,7 @@
      if (xwl_window->tearing_control)
          wp_tearing_control_v1_destroy(xwl_window->tearing_control);
  
@@ -88,7 +88,7 @@
      if (xwl_window->fractional_scale)
          wp_fractional_scale_v1_destroy(xwl_window->fractional_scale);
  
-@@ -2143,7 +2157,7 @@
+@@ -2184,7 +2198,7 @@
  {
      assert(!xwl_window->frame_callback);
  
@@ -111,7 +111,7 @@
      struct zxdg_toplevel_decoration_v1 *server_decoration;
 --- a/hw/xwayland/xwayland-present.c
 +++ b/hw/xwayland/xwayland-present.c
-@@ -748,6 +748,8 @@
+@@ -745,6 +745,8 @@
  
      if (!xwl_window)
          return FALSE;

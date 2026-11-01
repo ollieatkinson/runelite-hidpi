@@ -8,6 +8,14 @@ your desktop scale. The game, sidebar and title bar scale together.
 Uses the stock Linux Jagex Launcher and RuneLite, sharing your account and
 `~/.runelite` settings.
 
+Text copy/paste works between RuneLite and the desktop using Xwayland's
+[upstream clipboard bridge](https://gitlab.freedesktop.org/xorg/xserver/-/merge_requests/2139),
+enabled with `-clipboard`. The package uses Xwayland 26.0.99.903 (26.1 RC3).
+
+![RuneLite on KDE Wayland with xBR UI scaling and a 120 FPS counter](docs/images/runelite-hidpi-xbr.png)
+
+*GPU bicubic presentation with RuneLite’s xBR UI scaling, running at 120 FPS.*
+
 ## Install
 
 Install RuneLite through Jagex Launcher first.
@@ -72,9 +80,12 @@ variable. The variable is read when the private Xwayland starts.
   expansion would put it past the screen edge.
 - Closing the outer window through KDE can bypass RuneLite's exit confirmation.
   Use RuneLite's close button.
-- Dialogs and menus are confined to the outer window. Clipboard, tray behaviour
-  and mixed-scale monitors haven't been fully checked.
-- Resizing may briefly flicker. Gameplay performance hasn't been benchmarked.
+- Dialogs and menus are confined to the outer window. System tray icons aren't
+  supported; mixed-scale monitors haven't been checked.
+- Large clipboard transfers and images haven't been verified. The upstream
+  bridge doesn't support incremental transfers yet.
+- Login-screen performance matches native in our measurements. Gameplay
+  performance hasn't been benchmarked.
 
 ## Update
 

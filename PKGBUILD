@@ -4,16 +4,16 @@
 [[ ${SRCDEST:-$startdir} != "$startdir" ]] || SRCDEST="$startdir/src"
 pkgname=runelite-hidpi
 pkgver=0.1.0
-pkgrel=12
+pkgrel=21
 pkgdesc='Experimental whole-window RuneLite HiDPI bridge for KDE Wayland'
 arch=('x86_64')
 url='https://github.com/ollieatkinson/runelite-hidpi'
 license=('MIT' 'BSD-2-Clause')
-_xwaylandver=24.1.14
+_xwaylandver=26.0.99.903
 depends=('bash' 'jq' 'util-linux' 'qt6-tools' 'kdialog' 'xorg-xdpyinfo'
          'glibc' 'libx11' 'libdecor' 'libdrm' 'libepoxy' 'libglvnd' 'libtirpc'
          'libxau' 'libxcvt' 'libxfont2' 'libxshmfence' 'mesa' 'nettle' 'pixman'
-         'wayland' 'xorg-server-common')
+         'wayland>=1.26.0' 'xorg-server-common')
 makedepends=('meson' 'ninja' 'libxkbfile' 'xorgproto' 'xorg-font-util'
              'xtrans>=1.6.0' 'wayland-protocols>=1.49')
 source=("https://www.x.org/releases/individual/xserver/xwayland-$_xwaylandver.tar.xz"
@@ -25,7 +25,7 @@ source=("https://www.x.org/releases/individual/xserver/xwayland-$_xwaylandver.ta
         "runelite-bicubic.h::file://${startdir}/src/runelite-bicubic.h"
         "runelite-bicubic-gpu.h::file://${startdir}/src/runelite-bicubic-gpu.h"
         "runelite-bicubic-shader.h::file://${startdir}/src/runelite-bicubic-shader.h")
-sha256sums=('4eb6b98d678299a4b96138d886345b294130695760345ef84596225a8224078a')
+sha256sums=('fa07af573ff6e6f4b4a656c958b16ee77cafeb28189a8c7a4f384284165b020b')
 # Local sources are checked against the hashes below, updated when source changes.
 
 prepare() {
@@ -55,14 +55,13 @@ package() {
     install -Dm644 "$srcdir/xwayland-$_xwaylandver/COPYING" "$pkgdir/usr/share/licenses/$pkgname/Xwayland-COPYING"
     install -Dm644 "$srcdir/RuneLite-LICENSE" "$pkgdir/usr/share/licenses/$pkgname/RuneLite-LICENSE"
 }
-
-sha256sums+=('02593be86e1c4920c8710c698edce26fc2a577588994119a85889b9ca3071315')
-sha256sums+=('edf56cea61604a1dfefcaf279c230cc76087c3c7401122a67a093c10944cc444')
-sha256sums+=('6ee44c9f0eaba15d6e26d3a72821c730162843fd4a914e1d39e70509fa4acfb8')
+sha256sums+=('ef696d3eb4c7952ae91158b4679131ff898048fe92ca218a327fef8bc95dd516')
+sha256sums+=('640e9eead86a760cd15a9400ab1388d9f92b351f6b064858167dd2a83acbfd3b')
+sha256sums+=('75afadf32560af118e76eac6c3f1507fc462b5ace55cf99b37fe3d5112564769')
 sha256sums+=('81cb6ce7d8c4b9154e9840ab9d2938d0e6234f227049f004cacf90724f95cc11')
 sha256sums+=('ae06ee6dbbacfdd1298271c14bb630b434a34e3e434bc46d05b0301b318adac8')
 sha256sums+=('dd35829a586785621651857262168bd91374a84669592d2db28520648b55a519')
-sha256sums+=('3f710473f19d821062d1e1f27b3b75d97e75630aa4eda60d65ccdabd5295aec1')
-sha256sums+=('68172e9b8799cbcc8dfea602c1f9767dca3f9a742ba5cc762a6e983e88eff040')
+sha256sums+=('fb0d9d638ad5a8767459865544b23fa7012731bfbe5961aee9d51c5c57bb2bcf')
+sha256sums+=('570dfc78741c7fde23ff0eb76bfaa53a11cefa76baaa9fbb6227c3a798b5be06')
 sha256sums+=('9e10e9437f773e3b33f24e669fd0240da8278484cbbc1c9f5d630990005748ea')
 sha256sums+=('b02d72db46844ead7883aef01c6a2907edba552db689970f76e8f2e18024116d')
