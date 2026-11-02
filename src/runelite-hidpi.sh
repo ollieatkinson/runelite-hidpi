@@ -57,9 +57,16 @@ for file in "$app" "$libdir/Xwayland" "$libdir/nested-wm"; do
 done
 mkdir -p "$state"; chmod 700 "$state"
 exec 9>"$state/instance.lock"
+# KDE stores the logical cursor size; the private X11 display renders at 2x.
+cursor_theme=${XCURSOR_THEME:-$(kreadconfig6 --file kcminputrc --group Mouse --key cursorTheme --default default)}
+cursor_size=${XCURSOR_SIZE:-$(kreadconfig6 --file kcminputrc --group Mouse --key cursorSize --default 24)}
+[[ $cursor_size =~ ^[0-9]{1,3}$ ]] && ((10#$cursor_size > 0)) || cursor_size=24
 client_environment() {
     export DISPLAY=$1 _JAVA_AWT_WM_NONREPARENTING=1
     export RUNELITE_VMARGS="${RUNELITE_VMARGS:-} -Dsun.java2d.uiScale=2"
+    # XCURSOR_SIZE overrides X resources and cannot suit both the native Wayland
+    # launcher and its X11 game. Let each display supply its own cursor size.
+    unset XCURSOR_SIZE
 }
 publish_launcher_pid() {
     printf '%s\n' "$1" > "$state/launcher.pid.tmp"
@@ -165,6 +172,10 @@ exec 4<>"$state/wm.pipe"
 wm_pid=$!
 # A fast client must not map before the WM has selected MapRequest events.
 IFS= read -r -t 5 -u 4 line && [[ $line == READY ]] || fail 'Private window manager did not become ready.'
+# Keep the WM connected before setting resources, or the X server's last-client
+# reset will discard them. Java's interface scale is configured independently.
+printf 'Xcursor.theme: %s\nXcursor.size: %s\n' "$cursor_theme" "$((10#$cursor_size * 2))" |
+    xrdb -nocpp -merge
 publish_client false 0
 (
     maximized=0

@@ -25,6 +25,9 @@ Quit Jagex Launcher, then open **Jagex Launcher (RuneLite HiDPI)** and click Pla
 Set KDE's X11 scaling to **Apply scaling themselves** and enable RuneLite's
 custom window chrome.
 
+The cursor uses your KDE cursor theme and size, scaled for the 2× backing.
+Restart the HiDPI client and launcher after changing KDE's cursor settings.
+
 ## GPU bicubic scaling
 
 Close the HiDPI client and launcher, then run:

@@ -4,13 +4,13 @@
 [[ ${SRCDEST:-$startdir} != "$startdir" ]] || SRCDEST="$startdir/src"
 pkgname=runelite-hidpi
 pkgver=0.1.0
-pkgrel=26
+pkgrel=27
 pkgdesc='Experimental whole-window RuneLite HiDPI bridge for KDE Wayland'
 arch=('x86_64')
 url='https://github.com/ollieatkinson/runelite-hidpi'
 license=('MIT' 'BSD-2-Clause')
 _xwaylandver=26.0.99.903
-depends=('bash' 'jq' 'util-linux' 'qt6-tools' 'kdialog' 'xorg-xdpyinfo'
+depends=('bash' 'jq' 'util-linux' 'qt6-tools' 'kdialog' 'kconfig' 'xorg-xdpyinfo' 'xorg-xrdb'
          'glibc' 'libx11' 'libxdamage' 'libdecor' 'libdrm' 'libepoxy' 'libglvnd' 'libtirpc'
          'libxau' 'libxcvt' 'libxfont2' 'libxshmfence' 'mesa' 'nettle' 'pixman'
          'wayland>=1.26.0' 'xorg-server-common')
@@ -36,7 +36,7 @@ sha256sums=(
     'fa07af573ff6e6f4b4a656c958b16ee77cafeb28189a8c7a4f384284165b020b' # xwayland-26.0.99.903.tar.xz
     '574de9dd000c3539887ede1548a207e41f8c25d4bed67d0072c45fd6b880eee1' # xwayland.patch
     'db181fd0ae49d8a7a5d840c8b8fac04942043881cb0f09d53a7e4ad29b5746b7' # nested-wm.c
-    'a9908eb06414c1a6f07e0ed2226af77a034b90e6d3e53015e89a01893c38a173' # runelite-hidpi.sh
+    '9a73fb69129e82679f43a88d12f7f5ca640d807d383cb4719d0f0fde860f6018' # runelite-hidpi.sh
     '81cb6ce7d8c4b9154e9840ab9d2938d0e6234f227049f004cacf90724f95cc11' # runelite.png
     'ae06ee6dbbacfdd1298271c14bb630b434a34e3e434bc46d05b0301b318adac8' # net.runelite.RuneLite.HiDPI.desktop
     'dd35829a586785621651857262168bd91374a84669592d2db28520648b55a519' # RuneLite-LICENSE
