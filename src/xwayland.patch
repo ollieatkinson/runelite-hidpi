@@ -1,8 +1,14 @@
-diff --git a/hw/xwayland/meson.build b/hw/xwayland/meson.build
-index 997a6ee..662d44a 100644
 --- a/hw/xwayland/meson.build
 +++ b/hw/xwayland/meson.build
-@@ -47,6 +47,7 @@ xdg_output_xml = protodir / 'unstable' / 'xdg-output' / 'xdg-output-unstable-v1.
+@@ -24,6 +24,7 @@
+     'xwayland-cvt.h',
+     'xwayland-vidmode.c',
+     'xwayland-vidmode.h',
++    'runelite-present.c',
+     'xwayland-window.c',
+     'xwayland-window.h',
+     'xwayland-window-buffers.c',
+@@ -47,6 +48,7 @@
  dmabuf_xml = protodir / 'unstable' / 'linux-dmabuf' / 'linux-dmabuf-unstable-v1.xml'
  viewporter_xml = protodir / 'stable' / 'viewporter' / 'viewporter.xml'
  xdg_shell_xml = protodir / 'stable' / 'xdg-shell' / 'xdg-shell.xml'
@@ -10,7 +16,7 @@ index 997a6ee..662d44a 100644
  drm_lease_xml = protodir / 'staging' / 'drm-lease' / 'drm-lease-v1.xml'
  shortcuts_inhibit_xml = protodir / 'unstable' / 'keyboard-shortcuts-inhibit' / 'keyboard-shortcuts-inhibit-unstable-v1.xml'
  xwayland_shell_xml = protodir / 'staging' / 'xwayland-shell' / 'xwayland-shell-v1.xml'
-@@ -66,6 +67,7 @@ proto_xml = [
+@@ -66,6 +68,7 @@
      dmabuf_xml,
      viewporter_xml,
      xdg_shell_xml,
@@ -18,11 +24,9 @@ index 997a6ee..662d44a 100644
      drm_lease_xml,
      shortcuts_inhibit_xml,
      xwayland_shell_xml,
-diff --git a/hw/xwayland/xwayland-input.c b/hw/xwayland/xwayland-input.c
-index 576b68c..7ae9245 100644
 --- a/hw/xwayland/xwayland-input.c
 +++ b/hw/xwayland/xwayland-input.c
-@@ -815,6 +815,8 @@ pointer_handle_button(void *data, struct wl_pointer *pointer, uint32_t serial,
+@@ -815,6 +815,8 @@
      ValuatorMask mask;
  
      xwl_seat->xwl_screen->serial = serial;
@@ -31,11 +35,9 @@ index 576b68c..7ae9245 100644
  
      switch (button) {
      case BTN_LEFT:
-diff --git a/hw/xwayland/xwayland-input.h b/hw/xwayland/xwayland-input.h
-index 3cb5223..0f06a6f 100644
 --- a/hw/xwayland/xwayland-input.h
 +++ b/hw/xwayland/xwayland-input.h
-@@ -76,6 +76,7 @@ struct xwl_seat {
+@@ -76,6 +76,7 @@
      struct xwl_window *tablet_focus_window;
      uint32_t id;
      uint32_t pointer_enter_serial;
@@ -43,8 +45,6 @@ index 3cb5223..0f06a6f 100644
      uint8_t pointer_enter_count;
      Bool caps_initialized;
      struct xorg_list link;
-diff --git a/hw/xwayland/xwayland-output.c b/hw/xwayland/xwayland-output.c
-index 674a2c2..27caf7d 100644
 --- a/hw/xwayland/xwayland-output.c
 +++ b/hw/xwayland/xwayland-output.c
 @@ -29,6 +29,8 @@
@@ -56,7 +56,7 @@ index 674a2c2..27caf7d 100644
  
  #include "xwayland-cvt.h"
  #include "xwayland-output.h"
-@@ -193,7 +195,7 @@ xwl_set_pixmap_visit_window(WindowPtr window, void *data)
+@@ -193,7 +195,7 @@
      return WT_DONTWALKCHILDREN;
  }
  
@@ -65,7 +65,7 @@ index 674a2c2..27caf7d 100644
  update_backing_pixmaps(struct xwl_screen *xwl_screen, int width, int height)
  {
      ScreenPtr pScreen = xwl_screen->screen;
-@@ -208,15 +210,17 @@ update_backing_pixmaps(struct xwl_screen *xwl_screen, int width, int height)
+@@ -208,15 +210,17 @@
  
      if (old_pixmap) {
          TraverseTree(pRoot, xwl_set_pixmap_visit_window, old_pixmap);
@@ -84,7 +84,7 @@ index 674a2c2..27caf7d 100644
      if (xwl_screen_get_width(xwl_screen) != width)
          xwl_screen->width = width;
  
-@@ -227,7 +231,7 @@ update_screen_size(struct xwl_screen *xwl_screen, int width, int height)
+@@ -227,7 +231,7 @@
          SetRootClip(xwl_screen->screen, ROOT_CLIP_NONE);
  
      if (!xwl_screen->rootless && xwl_screen->screen->root)
@@ -93,7 +93,7 @@ index 674a2c2..27caf7d 100644
  
      xwl_screen->screen->width = width;
      xwl_screen->screen->height = height;
-@@ -236,12 +240,32 @@ update_screen_size(struct xwl_screen *xwl_screen, int width, int height)
+@@ -236,12 +240,32 @@
  
      SetRootClip(xwl_screen->screen, xwl_screen->root_clip_mode);
  
@@ -126,8 +126,6 @@ index 674a2c2..27caf7d 100644
          RRScreenSizeNotify(xwl_screen->screen);
      }
  
-diff --git a/hw/xwayland/xwayland-screen.c b/hw/xwayland/xwayland-screen.c
-index d47cb19..97f1e51 100644
 --- a/hw/xwayland/xwayland-screen.c
 +++ b/hw/xwayland/xwayland-screen.c
 @@ -49,6 +49,7 @@
@@ -138,7 +136,7 @@ index d47cb19..97f1e51 100644
  #include "xwayland-window.h"
  #include "xwayland-input.h"
  #include "xwayland-output.h"
-@@ -181,6 +182,19 @@ xwl_property_callback(CallbackListPtr *pcbl, void *closure,
+@@ -181,6 +182,22 @@
  
      xwl_screen = xwl_screen_get(screen);
  
@@ -149,6 +147,9 @@ index d47cb19..97f1e51 100644
 +            uint32_t *v = rec->prop->data;
 +            xwl_window_host_action(xwl_window, v[0], v[1], v[2]);
 +        }
++        if (name && strcmp(name, "_NET_ACTIVE_WINDOW") == 0 && rec->prop->type == XA_WINDOW &&
++            rec->prop->format == 32 && rec->prop->size == 1)
++            runelite_present_client(xwl_window, *(CARD32 *)rec->prop->data);
 +        if (name && strcmp(name, "_RUNELITE_HOST_TITLE") == 0 && rec->prop->format == 8 && xwl_window->xdg_toplevel) {
 +            char *title = strndup(rec->prop->data, rec->prop->size);
 +            if (title) { xdg_toplevel_set_title(xwl_window->xdg_toplevel, title); free(title); }
@@ -158,7 +159,15 @@ index d47cb19..97f1e51 100644
      if (rec->prop->propertyName == xwl_screen->allow_commits_prop)
          xwl_window_update_property(xwl_window, rec);
  }
-@@ -534,6 +548,9 @@ registry_global(void *data, struct wl_registry *registry, uint32_t id,
+@@ -501,6 +518,7 @@
+     xorg_list_for_each_entry_safe(xwl_window, next_xwl_window,
+                                   &commit_window_list, link_damage) {
+         wl_surface_commit(xwl_window->surface);
++        runelite_present_commit(xwl_window);
+         xorg_list_del(&xwl_window->link_damage);
+     }
+ }
+@@ -534,6 +552,9 @@
      else if (strcmp(interface, wl_shm_interface.name) == 0) {
          xwl_screen->shm = wl_registry_bind(registry, id, &wl_shm_interface, 1);
      }
@@ -168,7 +177,7 @@ index d47cb19..97f1e51 100644
      else if (strcmp(interface, xdg_wm_base_interface.name) == 0) {
          xwl_screen->xdg_wm_base =
              wl_registry_bind(registry, id, &xdg_wm_base_interface, 1);
-@@ -859,6 +876,9 @@ xwl_screen_lost_focus(struct xwl_screen *xwl_screen)
+@@ -859,6 +880,9 @@
  Bool
  xwl_screen_should_use_fractional_scale(struct xwl_screen *xwl_screen)
  {
@@ -178,11 +187,9 @@ index d47cb19..97f1e51 100644
      /* Fullscreen uses a viewport already */
      if (xwl_screen->fullscreen)
          return FALSE;
-diff --git a/hw/xwayland/xwayland-screen.h b/hw/xwayland/xwayland-screen.h
-index 8f4ce5c..f8ff610 100644
 --- a/hw/xwayland/xwayland-screen.h
 +++ b/hw/xwayland/xwayland-screen.h
-@@ -108,6 +108,8 @@ struct xwl_screen {
+@@ -108,6 +108,8 @@
      struct zwp_tablet_manager_v2 *tablet_manager;
      struct wl_shm *shm;
      struct xdg_wm_base *xdg_wm_base;
@@ -191,8 +198,6 @@ index 8f4ce5c..f8ff610 100644
      struct zwp_relative_pointer_manager_v1 *relative_pointer_manager;
      struct zwp_pointer_constraints_v1 *pointer_constraints;
      struct zwp_pointer_gestures_v1 *pointer_gestures;
-diff --git a/hw/xwayland/xwayland-window.c b/hw/xwayland/xwayland-window.c
-index c3cc56c..6ab4aac 100644
 --- a/hw/xwayland/xwayland-window.c
 +++ b/hw/xwayland/xwayland-window.c
 @@ -53,6 +53,7 @@
@@ -203,7 +208,7 @@ index c3cc56c..6ab4aac 100644
  #include "xwayland-shell-v1-client-protocol.h"
  #include "fractional-scale-v1-client-protocol.h"
  #include "linux-drm-syncobj-v1-client-protocol.h"
-@@ -896,7 +897,9 @@ xwl_window_rootful_update_title(struct xwl_window *xwl_window)
+@@ -896,7 +897,9 @@
  static void
  xwl_window_rootful_set_app_id(struct xwl_window *xwl_window)
  {
@@ -214,7 +219,7 @@ index c3cc56c..6ab4aac 100644
  
  #ifdef XWL_HAS_LIBDECOR
      if (xwl_window->libdecor_frame)
-@@ -1232,21 +1235,33 @@ xdg_toplevel_handle_configure(void *data,
+@@ -1232,21 +1235,33 @@
      Bool old_active = xwl_screen->active;
      double scale, new_width, new_height;
  
@@ -260,7 +265,7 @@ index c3cc56c..6ab4aac 100644
      }
  
      xwl_screen->active = FALSE;
-@@ -1329,6 +1344,51 @@ static const struct wp_fractional_scale_v1_listener fractional_scale_listener =
+@@ -1329,6 +1344,51 @@
     wp_fractional_scale_preferred_scale,
  };
  
@@ -312,7 +317,7 @@ index c3cc56c..6ab4aac 100644
  static Bool
  xwl_create_root_surface(struct xwl_window *xwl_window)
  {
-@@ -1363,6 +1423,12 @@ xwl_create_root_surface(struct xwl_window *xwl_window)
+@@ -1363,6 +1423,12 @@
              goto err_surf;
          }
  
@@ -325,19 +330,66 @@ index c3cc56c..6ab4aac 100644
          xdg_surface_add_listener(xwl_window->xdg_surface,
                                   &xdg_surface_listener, xwl_window);
  
-diff --git a/hw/xwayland/xwayland-window.h b/hw/xwayland/xwayland-window.h
-index 09d5305..aad6c48 100644
+@@ -1732,6 +1798,7 @@
+     WindowPtr window = xwl_window->toplevel;
+     ScreenPtr screen = xwl_screen->screen;
+ 
++    runelite_present_fini(xwl_window);
+     compUnredirectWindow(serverClient, window, CompositeRedirectManual);
+ 
+     xorg_list_for_each_entry(xwl_seat, &xwl_screen->seat_list, link) {
+@@ -1797,6 +1864,9 @@
+     struct xwl_window *xwl_window = xwl_window_from_window(window);
+     Bool ret;
+ 
++    if (!xwl_screen->rootless)
++        runelite_present_unmap(xwl_window_get(screen->root), window->drawable.id);
++
+     screen->UnrealizeWindow = xwl_screen->UnrealizeWindow;
+     ret = (*screen->UnrealizeWindow) (window);
+     xwl_screen->UnrealizeWindow = screen->UnrealizeWindow;
+@@ -2079,6 +2149,9 @@
+     PixmapPtr pixmap;
+     int i;
+ 
++    if (runelite_present_waiting(xwl_window))
++        return FALSE;
++
+     pixmap = xwl_window_swap_pixmap(xwl_window, TRUE);
+     buffer = xwl_pixmap_get_wl_buffer(pixmap);
+ 
+@@ -2118,6 +2191,11 @@
+ {
+     assert(!xwl_window->frame_callback);
+ 
++    if (runelite_present_waiting(xwl_window)) {
++        DamageEmpty(window_get_damage(xwl_window->surface_window));
++        return;
++    }
++
+     if (!xwl_window_attach_buffer(xwl_window))
+         return;
+ 
 --- a/hw/xwayland/xwayland-window.h
 +++ b/hw/xwayland/xwayland-window.h
-@@ -62,6 +62,7 @@ struct xwl_window {
+@@ -41,6 +41,7 @@
+ #include <xf86drm.h>
+ 
+ #include "xwayland-types.h"
++#include "runelite-present.h"
+ #include "xwayland-dmabuf.h"
+ 
+ struct xwl_wl_surface {
+@@ -62,6 +63,8 @@
      int surface_scale;
      struct xdg_surface *xdg_surface;
      struct xdg_toplevel *xdg_toplevel;
 +    struct zxdg_toplevel_decoration_v1 *server_decoration;
++    struct runelite_present runelite_present;
  
      /* Top-level window for the Wayland surface:
       * - With rootful, the root window itself
-@@ -109,6 +110,7 @@ struct xwl_window {
+@@ -109,6 +112,7 @@
      Bool awaiting_initial_configure_event;
  };
  

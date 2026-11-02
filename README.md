@@ -40,7 +40,6 @@ for KDE's usual scaling.
 
 ## Known limitations
 
-- Brief black flicker during client startup.
 - One RuneLite client per HiDPI launch. Window size is saved; position isn't.
 - “Keep game size” needs an unmaximized window. The sidebar can extend past the
   screen edge to keep the game in place.

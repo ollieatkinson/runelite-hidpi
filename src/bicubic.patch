@@ -6,10 +6,10 @@
      'xwayland-vidmode.h',
 +    'runelite-bicubic.c',
 +    'runelite-bicubic-gpu.c',
+     'runelite-present.c',
      'xwayland-window.c',
      'xwayland-window.h',
-     'xwayland-window-buffers.c',
-@@ -32,6 +34,19 @@
+@@ -33,6 +35,19 @@
      '../../mi/miinitext.h',
  ]
  
@@ -31,7 +31,7 @@
  
 --- a/hw/xwayland/xwayland-screen.c
 +++ b/hw/xwayland/xwayland-screen.c
-@@ -923,7 +923,8 @@
+@@ -927,7 +927,8 @@
          return FALSE;
  
      old_scale = xwl_screen->global_surface_scale;
@@ -100,17 +100,17 @@
      xwl_window->fractional_scale_numerator = FRACTIONAL_SCALE_DENOMINATOR;
      xwl_window->viewport_scale_x = 1.0;
      xwl_window->viewport_scale_y = 1.0;
-@@ -1798,6 +1807,7 @@
-     WindowPtr window = xwl_window->toplevel;
+@@ -1799,6 +1808,7 @@
      ScreenPtr screen = xwl_screen->screen;
  
+     runelite_present_fini(xwl_window);
 +    runelite_bicubic_fini(xwl_window);
      compUnredirectWindow(serverClient, window, CompositeRedirectManual);
  
      xorg_list_for_each_entry(xwl_seat, &xwl_screen->seat_list, link) {
-@@ -2184,7 +2194,7 @@
- {
-     assert(!xwl_window->frame_callback);
+@@ -2196,7 +2206,7 @@
+         return;
+     }
  
 -    if (!xwl_window_attach_buffer(xwl_window))
 +    if (!runelite_bicubic_attach(xwl_window) && !xwl_window_attach_buffer(xwl_window))
@@ -119,7 +119,7 @@
      xwl_window_create_frame_callback(xwl_window);
 --- a/hw/xwayland/xwayland-window.h
 +++ b/hw/xwayland/xwayland-window.h
-@@ -60,6 +60,9 @@
+@@ -61,6 +61,9 @@
      struct wp_viewport *viewport;
      float viewport_scale_x, viewport_scale_y;
      int surface_scale;

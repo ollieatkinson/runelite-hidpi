@@ -105,7 +105,9 @@ host_visibility() {
     } > "$script"
     id=$(timeout 5 qdbus6 org.kde.KWin /Scripting org.kde.kwin.Scripting.loadScript "$script" "$name" 2>/dev/null) || return 0
     if [[ $id =~ ^[0-9]+$ ]]; then
-        timeout 5 qdbus6 org.kde.KWin "/Scripting/Script$id" org.kde.kwin.Script.run >/dev/null 2>&1 || :
+        # KWin can reuse an occupied D-Bus script ID after another script unloads.
+        # Starting through Scripting reaches the loaded object; running scripts stay running.
+        timeout 5 qdbus6 org.kde.KWin /Scripting org.kde.kwin.Scripting.start >/dev/null 2>&1 || :
         if [[ $persistent == 0 ]]; then sleep .25; fi
     fi
     [[ $persistent == 0 ]] || return 0
@@ -158,6 +160,11 @@ done
 host_visibility 0
 rm -f -- "$state/wm.pipe"
 mkfifo "$state/wm.pipe"
+exec 4<>"$state/wm.pipe"
+"$libdir/nested-wm" 9>&- 4>&- > "$state/wm.pipe" 2>&1 &
+wm_pid=$!
+# A fast client must not map before the WM has selected MapRequest events.
+IFS= read -r -t 5 -u 4 line && [[ $line == READY ]] || fail 'Private window manager did not become ready.'
 publish_client false 0
 (
     maximized=0
@@ -189,6 +196,12 @@ publish_client false 0
                     jq -n --argjson width "$((BASH_REMATCH[1]/2))" --argjson height "$((BASH_REMATCH[2]/2))" '{width:$width,height:$height}' > "$state/window.json.tmp"
                     mv -- "$state/window.json.tmp" "$state/window.json"
                 fi;;
+            'CLIENT mapped '*)
+                present=1
+                if [[ $line =~ ^CLIENT\ mapped\ ([0-9]+)$ && ${BASH_REMATCH[1]} != 0 ]]; then
+                    client_pid=${BASH_REMATCH[1]}
+                fi
+                publish_client true "$client_pid";;
             'CLIENT '*)
                 if [[ $line == *shown* ]]; then present=1; else present=0; handoff=1; fi
                 if [[ $present == 1 ]]; then
@@ -212,10 +225,9 @@ publish_client false 0
                 if [[ $present == 1 ]]; then handoff=0; fi;;
         esac
     done < "$state/wm.pipe"
-) 9>&- &
+) 9>&- 4>&- &
 watcher_pid=$!
-"$libdir/nested-wm" 9>&- > "$state/wm.pipe" 2>&1 &
-wm_pid=$!
+exec 4>&-
 setsid "$app" --ozone-platform=wayland "$@" 9>&- > "$state/launcher-private.log" 2>&1 &
 launcher_pid=$!
 publish_launcher_pid "$launcher_pid"

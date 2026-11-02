@@ -1,9 +1,12 @@
 /* Single-client X11 window manager for the private rootful Xwayland host. */
 #include <X11/Xatom.h>
 #include <X11/Xlib.h>
+#include <X11/Xproto.h>
 #include <X11/Xutil.h>
+#include <X11/extensions/Xdamage.h>
 #include <stdbool.h>
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 
 enum HostAction {
@@ -21,6 +24,7 @@ enum AtomIndex {
     HOST_ACTION,
     HOST_TITLE,
     HOST_STATE,
+    HOST_FRAME_READY,
     UTF8_STRING,
     WM_STATE,
     WM_CHANGE_STATE,
@@ -42,6 +46,7 @@ static char *atom_names[ATOM_COUNT] = {
     [HOST_ACTION] = "_RUNELITE_HOST_ACTION",
     [HOST_TITLE] = "_RUNELITE_HOST_TITLE",
     [HOST_STATE] = "_RUNELITE_HOST_STATE",
+    [HOST_FRAME_READY] = "_RUNELITE_FRAME_READY",
     [UTF8_STRING] = "UTF8_STRING",
     [WM_STATE] = "WM_STATE",
     [WM_CHANGE_STATE] = "WM_CHANGE_STATE",
@@ -63,6 +68,10 @@ static Window root_window, client_window;
 static Atom atoms[ATOM_COUNT];
 static int root_width, root_height;
 static bool maximized;
+static int damage_event, damage_error;
+static Damage pending_paint;
+static unsigned long paint_serial, client_pid;
+static bool client_ready;
 
 static void send_host_action(enum HostAction action, unsigned long a, unsigned long b)
 {
@@ -123,7 +132,46 @@ static void repaint_client(void)
     event.xexpose.window = client_window;
     event.xexpose.width = root_width;
     event.xexpose.height = root_height;
+    /* Ignore initial/background damage queued before the repaint request. */
+    if (pending_paint)
+        paint_serial = NextRequest(display);
     XSendEvent(display, client_window, False, ExposureMask, &event);
+}
+
+static void first_paint(const XDamageNotifyEvent *event)
+{
+    if (!pending_paint || event->damage != pending_paint || event->serial < paint_serial)
+        return;
+    XDamageDestroy(display, pending_paint);
+    pending_paint = None;
+    XChangeProperty(display, root_window, atoms[NET_ACTIVE_WINDOW], XA_WINDOW, 32,
+                    PropModeReplace, (unsigned char *)&client_window, 1);
+}
+
+static void client_closed(Window window)
+{
+    if (window != client_window)
+        return;
+    if (pending_paint)
+        XDamageDestroy(display, pending_paint);
+    pending_paint = None;
+    client_window = None;
+    client_pid = 0;
+    client_ready = false;
+    puts("CLIENT closed");
+}
+
+static int window_error(Display *d, XErrorEvent *event)
+{
+    /* The client can disappear while its map, paint or unmap events are queued. */
+    if (event->error_code == BadWindow || event->error_code == BadDrawable ||
+        (event->error_code == BadMatch && event->request_code == X_SetInputFocus) ||
+        event->error_code == damage_error + BadDamage)
+        return 0;
+    char message[256];
+    XGetErrorText(d, event->error_code, message, sizeof(message));
+    fprintf(stderr, "Nested WM: %s (request %u)\n", message, event->request_code);
+    exit(1);
 }
 
 static void set_wm_state(Window window, long state)
@@ -207,6 +255,9 @@ static void handle_map_request(const XMapRequestEvent *event)
 
     if (!client_window && !transient_for) {
         client_window = window;
+        client_ready = false;
+        XDeleteProperty(display, root_window, atoms[HOST_FRAME_READY]);
+        pending_paint = XDamageCreate(display, window, XDamageReportRawRectangles);
         maximized = false;
         unsigned long extents[] = {0, 0, 0, 0};
         XChangeProperty(display, window, atoms[NET_FRAME_EXTENTS], XA_CARDINAL, 32,
@@ -226,8 +277,6 @@ static void handle_map_request(const XMapRequestEvent *event)
             resize_host(attributes.width, attributes.height);
 
         fit_client_to_host();
-        XChangeProperty(display, root_window, atoms[NET_ACTIVE_WINDOW], XA_WINDOW, 32,
-                        PropModeReplace, (unsigned char *)&window, 1);
     }
     XMapWindow(display, window);
     XSetInputFocus(display, window, RevertToParent, CurrentTime);
@@ -244,7 +293,8 @@ static void handle_map_request(const XMapRequestEvent *event)
             pid = *(unsigned long *)data;
         if (data)
             XFree(data);
-        printf("CLIENT shown %lu\n", pid);
+        client_pid = pid;
+        printf("CLIENT mapped %lu\n", pid);
     }
 }
 
@@ -342,6 +392,23 @@ static void handle_client_message(const XClientMessageEvent *event)
 
 static void handle_property_notify(const XPropertyEvent *event)
 {
+    if (event->window == root_window && event->atom == atoms[HOST_FRAME_READY]) {
+        Atom type;
+        int format;
+        unsigned long count, remaining;
+        unsigned char *data = NULL;
+        XGetWindowProperty(display, root_window, atoms[HOST_FRAME_READY], 0, 1, False,
+                           XA_WINDOW, &type, &format, &count, &remaining, &data);
+        if (!pending_paint && !client_ready && client_window && data && type == XA_WINDOW && format == 32 &&
+            count == 1 && *(unsigned long *)data == client_window) {
+            client_ready = true;
+            printf("CLIENT shown %lu\n", client_pid);
+        }
+        if (data)
+            XFree(data);
+        return;
+    }
+
     if (event->window == root_window && event->atom == atoms[HOST_STATE]) {
         sync_host_state();
     } else if (event->window == client_window) {
@@ -380,6 +447,13 @@ int main(void)
         fputs("Unable to open X11 display\n", stderr);
         return 1;
     }
+    int damage_major = 1, damage_minor = 1;
+    if (!XDamageQueryExtension(display, &damage_event, &damage_error) ||
+        !XDamageQueryVersion(display, &damage_major, &damage_minor)) {
+        fputs("DAMAGE extension unavailable\n", stderr);
+        return 1;
+    }
+    XSetErrorHandler(window_error);
     root_window = DefaultRootWindow(display);
     read_root_geometry();
     XInternAtoms(display, atom_names, ATOM_COUNT, False, atoms);
@@ -387,10 +461,16 @@ int main(void)
     XSelectInput(display, root_window,
                  SubstructureRedirectMask | SubstructureNotifyMask | StructureNotifyMask | PropertyChangeMask);
     XSync(display, False);
+    puts("READY");
 
     for (;;) {
         XEvent event;
         XNextEvent(display, &event);
+        if (event.type == damage_event + XDamageNotify) {
+            first_paint((const XDamageNotifyEvent *)&event);
+            XFlush(display);
+            continue;
+        }
         switch (event.type) {
         case MapRequest:
             handle_map_request(&event.xmaprequest);
@@ -416,10 +496,10 @@ int main(void)
             handle_property_notify(&event.xproperty);
             break;
         case DestroyNotify:
-            if (event.xdestroywindow.window == client_window) {
-                client_window = None;
-                puts("CLIENT closed");
-            }
+            client_closed(event.xdestroywindow.window);
+            break;
+        case UnmapNotify:
+            client_closed(event.xunmap.window);
             break;
         }
         XFlush(display);
