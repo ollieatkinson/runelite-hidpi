@@ -65,19 +65,31 @@ not include this path. GPU presentation requires Glamor, DMA-BUF buffers and
 implicit synchronization support. Unsupported configurations retain CPU bicubic.
 Presentation buffers are reused only after the compositor releases them.
 To check activation, look for `RuneLite filter bicubic GPU:` in
-`~/.local/state/runelite-hidpi/server.log`. Add `--gpu` to
-`tools/smoke-filters.py` to require GPU filtering in the isolated window tests.
+`~/.local/state/runelite-hidpi/server.log`.
 
 There is no filter-selection CLI. To return to
 the original path, close the client and launcher and launch without the environment
 variable. The variable is read when the private Xwayland starts.
 
+## Development
+
+`makepkg` installs the build dependencies listed in `PKGBUILD` with `-s`.
+The filters compile as separate C files; edit `src/bicubic.vert.glsl` and
+`src/bicubic.frag.glsl` for shader changes. Meson embeds the GLSL using `awk`
+(`gawk` is a build dependency), so no shader files need loading at runtime.
+The launcher's KWin script lives in `src/host-window.js` and is installed beside
+the private Xwayland binary.
+
+There are no handwritten Python scripts. Meson still requires Python as part
+of its own build tooling.
+
 ## Rough edges
 
+- The client can briefly flicker black during startup.
 - One RuneLite client per HiDPI launch.
 - Window size is remembered; position isn't.
-- “Keep game size” requires an unmaximized window. KDE may move it when sidebar
-  expansion would put it past the screen edge.
+- “Keep game size” requires an unmaximized window. Sidebar resizing keeps the
+  game in place; the sidebar can extend past the screen edge if there isn't room.
 - Closing the outer window through KDE can bypass RuneLite's exit confirmation.
   Use RuneLite's close button.
 - Dialogs and menus are confined to the outer window. System tray icons aren't

@@ -4,7 +4,7 @@
 [[ ${SRCDEST:-$startdir} != "$startdir" ]] || SRCDEST="$startdir/src"
 pkgname=runelite-hidpi
 pkgver=0.1.0
-pkgrel=21
+pkgrel=25
 pkgdesc='Experimental whole-window RuneLite HiDPI bridge for KDE Wayland'
 arch=('x86_64')
 url='https://github.com/ollieatkinson/runelite-hidpi'
@@ -14,7 +14,7 @@ depends=('bash' 'jq' 'util-linux' 'qt6-tools' 'kdialog' 'xorg-xdpyinfo'
          'glibc' 'libx11' 'libdecor' 'libdrm' 'libepoxy' 'libglvnd' 'libtirpc'
          'libxau' 'libxcvt' 'libxfont2' 'libxshmfence' 'mesa' 'nettle' 'pixman'
          'wayland>=1.26.0' 'xorg-server-common')
-makedepends=('meson' 'ninja' 'libxkbfile' 'xorgproto' 'xorg-font-util'
+makedepends=('meson' 'ninja' 'gawk' 'libxkbfile' 'xorgproto' 'xorg-font-util'
              'xtrans>=1.6.0' 'wayland-protocols>=1.49')
 source=("https://www.x.org/releases/individual/xserver/xwayland-$_xwaylandver.tar.xz"
         "xwayland.patch::file://${startdir}/src/xwayland.patch" "nested-wm.c::file://${startdir}/src/nested-wm.c"
@@ -24,16 +24,37 @@ source=("https://www.x.org/releases/individual/xserver/xwayland-$_xwaylandver.ta
         "bicubic.patch::file://${startdir}/src/bicubic.patch"
         "runelite-bicubic.h::file://${startdir}/src/runelite-bicubic.h"
         "runelite-bicubic-gpu.h::file://${startdir}/src/runelite-bicubic-gpu.h"
-        "runelite-bicubic-shader.h::file://${startdir}/src/runelite-bicubic-shader.h")
-sha256sums=('fa07af573ff6e6f4b4a656c958b16ee77cafeb28189a8c7a4f384284165b020b')
-# Local sources are checked against the hashes below, updated when source changes.
+        "runelite-bicubic.c::file://${startdir}/src/runelite-bicubic.c"
+        "runelite-bicubic-gpu.c::file://${startdir}/src/runelite-bicubic-gpu.c"
+        "bicubic.vert.glsl::file://${startdir}/src/bicubic.vert.glsl"
+        "bicubic.frag.glsl::file://${startdir}/src/bicubic.frag.glsl"
+        "embed-shader.awk::file://${startdir}/src/embed-shader.awk"
+        "host-window.js::file://${startdir}/src/host-window.js")
+sha256sums=(
+    'fa07af573ff6e6f4b4a656c958b16ee77cafeb28189a8c7a4f384284165b020b' # xwayland-26.0.99.903.tar.xz
+    'ef696d3eb4c7952ae91158b4679131ff898048fe92ca218a327fef8bc95dd516' # xwayland.patch
+    '640e9eead86a760cd15a9400ab1388d9f92b351f6b064858167dd2a83acbfd3b' # nested-wm.c
+    '9b8899e1c460f12419d635f5edd0ddc786bb43b557586943af1b7f55ecd7abe6' # runelite-hidpi.sh
+    '81cb6ce7d8c4b9154e9840ab9d2938d0e6234f227049f004cacf90724f95cc11' # runelite.png
+    'ae06ee6dbbacfdd1298271c14bb630b434a34e3e434bc46d05b0301b318adac8' # net.runelite.RuneLite.HiDPI.desktop
+    'dd35829a586785621651857262168bd91374a84669592d2db28520648b55a519' # RuneLite-LICENSE
+    '544e22d4902fb9276b32da558c4b2dae78286e2d6ac40f82b4c95e3bc1d579d1' # bicubic.patch
+    'e5ff562a16d3a84da9175cc7861fa73077c35f9d8fd3e758392988d7b1bf3e89' # runelite-bicubic.h
+    '22764998fd222ede1d77f4ee9791b70857c3ce13ced2d75c4ae59b56629ec395' # runelite-bicubic-gpu.h
+    '57cdbce0fa0acd8eabbde6f1d44a1bd5bd11a45fa7fc1bb2f13bb696de6b0c14' # runelite-bicubic.c
+    'ccce9e6944088b34c2719061f7b8c69234d762a91877f3d87183a57c212a132e' # runelite-bicubic-gpu.c
+    '9d6d6349ec5c472c7df45bcfaeaa3262869b1f127561c0500b66bdcec8d5696c' # bicubic.vert.glsl
+    '7f0fe158159645993b567ebeb4fcede859b6af50cf135cd478050c18490d27cd' # bicubic.frag.glsl
+    '86236c6e9bc215e1a14fd5c66e3872c395f3bd03f177d0d2019131e607c1e62f' # embed-shader.awk
+    '6ab1531937c2be892eb6b78cf48d7fcc066161c0cc0007b01dba97a90b541d32' # host-window.js
+)
 
 prepare() {
     cd "$srcdir/xwayland-$_xwaylandver"
     patch -Np1 -i "$srcdir/xwayland.patch"
     patch -Np1 -i "$srcdir/bicubic.patch"
-    cp "$srcdir/runelite-bicubic.h" "$srcdir/runelite-bicubic-gpu.h" \
-        "$srcdir/runelite-bicubic-shader.h" hw/xwayland/
+    cp "$srcdir"/runelite-bicubic{,-gpu}.{c,h} "$srcdir"/bicubic.{vert,frag}.glsl \
+        "$srcdir/embed-shader.awk" hw/xwayland/
 }
 
 build() {
@@ -47,6 +68,7 @@ build() {
 
 package() {
     install -Dm755 "$srcdir/build/hw/xwayland/Xwayland" "$pkgdir/usr/lib/runelite-hidpi/Xwayland"
+    install -Dm644 "$srcdir/host-window.js" "$pkgdir/usr/lib/runelite-hidpi/host-window.js"
     install -Dm755 "$srcdir/nested-wm" "$pkgdir/usr/lib/runelite-hidpi/nested-wm"
     install -Dm755 "$srcdir/runelite-hidpi.sh" "$pkgdir/usr/bin/runelite-hidpi"
     install -Dm644 "$srcdir/net.runelite.RuneLite.HiDPI.desktop" "$pkgdir/usr/share/applications/net.runelite.RuneLite.HiDPI.desktop"
@@ -55,13 +77,3 @@ package() {
     install -Dm644 "$srcdir/xwayland-$_xwaylandver/COPYING" "$pkgdir/usr/share/licenses/$pkgname/Xwayland-COPYING"
     install -Dm644 "$srcdir/RuneLite-LICENSE" "$pkgdir/usr/share/licenses/$pkgname/RuneLite-LICENSE"
 }
-sha256sums+=('ef696d3eb4c7952ae91158b4679131ff898048fe92ca218a327fef8bc95dd516')
-sha256sums+=('640e9eead86a760cd15a9400ab1388d9f92b351f6b064858167dd2a83acbfd3b')
-sha256sums+=('75afadf32560af118e76eac6c3f1507fc462b5ace55cf99b37fe3d5112564769')
-sha256sums+=('81cb6ce7d8c4b9154e9840ab9d2938d0e6234f227049f004cacf90724f95cc11')
-sha256sums+=('ae06ee6dbbacfdd1298271c14bb630b434a34e3e434bc46d05b0301b318adac8')
-sha256sums+=('dd35829a586785621651857262168bd91374a84669592d2db28520648b55a519')
-sha256sums+=('fb0d9d638ad5a8767459865544b23fa7012731bfbe5961aee9d51c5c57bb2bcf')
-sha256sums+=('570dfc78741c7fde23ff0eb76bfaa53a11cefa76baaa9fbb6227c3a798b5be06')
-sha256sums+=('9e10e9437f773e3b33f24e669fd0240da8278484cbbc1c9f5d630990005748ea')
-sha256sums+=('b02d72db46844ead7883aef01c6a2907edba552db689970f76e8f2e18024116d')

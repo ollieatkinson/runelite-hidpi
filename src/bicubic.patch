@@ -1,3 +1,34 @@
+--- a/hw/xwayland/meson.build
++++ b/hw/xwayland/meson.build
+@@ -24,6 +24,8 @@
+     'xwayland-cvt.h',
+     'xwayland-vidmode.c',
+     'xwayland-vidmode.h',
++    'runelite-bicubic.c',
++    'runelite-bicubic-gpu.c',
+     'xwayland-window.c',
+     'xwayland-window.h',
+     'xwayland-window-buffers.c',
+@@ -32,6 +34,19 @@
+     '../../mi/miinitext.h',
+ ]
+ 
++# Keep shader sources editable as GLSL, embedding them into the private binary.
++shader_awk = find_program('awk')
++foreach shader : [['vert', 'vertex'], ['frag', 'fragment']]
++    srcs += custom_target('bicubic-' + shader[0],
++        input: 'bicubic.' + shader[0] + '.glsl',
++        output: 'bicubic-' + shader[0] + '.h',
++        command: [shader_awk, '-v', 'name=runelite_filter_' + shader[1],
++                  '-f', files('embed-shader.awk'), '@INPUT@'],
++        depend_files: files('embed-shader.awk'),
++        capture: true,
++    )
++endforeach
++
+ scanner_dep = dependency('wayland-scanner', native: true)
+ scanner = find_program(scanner_dep.get_variable(pkgconfig : 'wayland_scanner'))
+ 
 --- a/hw/xwayland/xwayland-screen.c
 +++ b/hw/xwayland/xwayland-screen.c
 @@ -923,7 +923,8 @@
@@ -69,26 +100,15 @@
      xwl_window->fractional_scale_numerator = FRACTIONAL_SCALE_DENOMINATOR;
      xwl_window->viewport_scale_x = 1.0;
      xwl_window->viewport_scale_y = 1.0;
-@@ -1798,6 +1807,10 @@
+@@ -1798,6 +1807,7 @@
      WindowPtr window = xwl_window->toplevel;
      ScreenPtr screen = xwl_screen->screen;
  
-+    if (!xwl_screen->rootless) runelite_filter_fini(xwl_screen);
-+    struct runelite_frame *frame, *next;
-+    xorg_list_for_each_entry_safe(frame, next, &xwl_window->runelite_frames, link)
-+        runelite_bicubic_release(frame);
++    runelite_bicubic_fini(xwl_window);
      compUnredirectWindow(serverClient, window, CompositeRedirectManual);
  
      xorg_list_for_each_entry(xwl_seat, &xwl_screen->seat_list, link) {
-@@ -1829,6 +1842,7 @@
-     if (xwl_window->tearing_control)
-         wp_tearing_control_v1_destroy(xwl_window->tearing_control);
- 
-+    if (xwl_window->runelite_viewport) wp_viewport_destroy(xwl_window->runelite_viewport);
-     if (xwl_window->fractional_scale)
-         wp_fractional_scale_v1_destroy(xwl_window->fractional_scale);
- 
-@@ -2184,7 +2198,7 @@
+@@ -2184,7 +2194,7 @@
  {
      assert(!xwl_window->frame_callback);
  

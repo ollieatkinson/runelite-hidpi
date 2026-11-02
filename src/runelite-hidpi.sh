@@ -94,17 +94,15 @@ publish_client() {
     mv -- "$state/client.json.tmp" "$state/client.json"
 }
 host_visibility() {
-    local visible=$1 center=${2:-0} persistent=${3:-0} width=${4:-0} height=${5:-0} script="$state/window-$server_pid.js" name="runelite-hidpi-window-$server_pid" operations id
-    if [[ $visible == 1 ]]; then
-        operations='w.skipTaskbar=false;w.skipSwitcher=false;w.minimized=false;workspace.activeWindow=w;'
-        if [[ $center == 1 && $width != 0 && $height != 0 ]]; then
-            operations+='function center(){const c=w.clientGeometry;if(Math.abs(c.width-'"$width"'/2)>1||Math.abs(c.height-'"$height"'/2)>1)return;w.frameGeometryChanged.disconnect(center);const area=workspace.clientArea(KWin.PlacementArea,w);const g=w.frameGeometry;w.frameGeometry={x:area.x+(area.width-g.width)/2,y:area.y+(area.height-g.height)/2,width:g.width,height:g.height};}w.frameGeometryChanged.connect(center);center();'
-        fi
-        operations+='w.opacity=1;'
-    else
-        operations='w.opacity=0;w.minimized=true;w.skipTaskbar=true;w.skipSwitcher=true;'
-    fi
-    printf 'function apply(w){if(w.pid===%s){%s}};for(const w of workspace.windowList())apply(w);workspace.windowAdded.connect(apply);\n' "$server_pid" "$operations" > "$script"
+    local visible=$1 center=${2:-0} persistent=${3:-0}
+    local kind=window
+    if [[ $persistent == 1 ]]; then kind=host; fi
+    local script="$state/$kind-$server_pid.js" name="runelite-hidpi-$kind-$server_pid" id
+    {
+        printf 'const settings = {pid:%s,visible:%s,center:%s,track:%s};\n' \
+            "$server_pid" "$visible" "$center" "$persistent"
+        cat "$libdir/host-window.js"
+    } > "$script"
     id=$(timeout 5 qdbus6 org.kde.KWin /Scripting org.kde.kwin.Scripting.loadScript "$script" "$name" 2>/dev/null) || return 0
     if [[ $id =~ ^[0-9]+$ ]]; then
         timeout 5 qdbus6 org.kde.KWin "/Scripting/Script$id" org.kde.kwin.Script.run >/dev/null 2>&1 || :
@@ -121,8 +119,10 @@ cleanup() {
         kill "$pid" 2>/dev/null || :
     done
     if [[ -n $server_pid ]]; then
-        timeout 5 qdbus6 org.kde.KWin /Scripting org.kde.kwin.Scripting.unloadScript "runelite-hidpi-window-$server_pid" >/dev/null 2>&1 || :
-        rm -f -- "$state/window-$server_pid.js"
+        for kind in host window; do
+            timeout 5 qdbus6 org.kde.KWin /Scripting org.kde.kwin.Scripting.unloadScript "runelite-hidpi-$kind-$server_pid" >/dev/null 2>&1 || :
+            rm -f -- "$state/$kind-$server_pid.js"
+        done
     fi
     rm -f -- "$state/active.json" "$state/wm.pipe" "$state/server.pipe" "$state/client-present" "$state/client.json" "$state/client.json.tmp" "$state/launcher.pid" "$state/launcher.pid.tmp"
 }
@@ -142,6 +142,7 @@ exec 3<>"$state/server.pipe"
 ) 9>&- >"$state/server.log" 2>&1 &
 server_pid=$!
 # Install the owned-window handler before the server can map its empty root.
+# Keep it loaded to anchor later sidebar resizes, independent of visibility scripts.
 host_visibility 0 0 1
 printf '\n' >&3
 exec 3>&-
@@ -154,7 +155,6 @@ for ((attempt=0;attempt<60;attempt++)); do
     sleep .2
 done
 [[ $ready == 1 ]] || fail 'Private Xwayland did not become ready.'
-timeout 5 qdbus6 org.kde.KWin /Scripting org.kde.kwin.Scripting.unloadScript "runelite-hidpi-window-$server_pid" >/dev/null 2>&1 || :
 host_visibility 0
 rm -f -- "$state/wm.pipe"
 mkfifo "$state/wm.pipe"
@@ -165,7 +165,6 @@ publish_client false 0
     present=0
     handoff=0
     startup=1
-    center_pending=0
     client_pid=0
     while true; do
         # The splash closes just before the main window maps. Keep the host
@@ -186,10 +185,6 @@ publish_client false 0
             'STATE 1') maximized=1;;
             'STATE 0') maximized=0;;
             'ROOT '*)
-                if [[ $center_pending == 1 && $present == 1 && $line =~ ^ROOT\ ([0-9]+)x([0-9]+)$ ]]; then
-                    host_visibility 1 1 0 "${BASH_REMATCH[1]}" "${BASH_REMATCH[2]}"
-                    center_pending=0
-                fi
                 if [[ $maximized == 0 && $line =~ ^ROOT\ ([0-9]+)x([0-9]+)$ ]]; then
                     jq -n --argjson width "$((BASH_REMATCH[1]/2))" --argjson height "$((BASH_REMATCH[2]/2))" '{width:$width,height:$height}' > "$state/window.json.tmp"
                     mv -- "$state/window.json.tmp" "$state/window.json"
@@ -203,11 +198,10 @@ publish_client false 0
                     publish_client true "$client_pid"
                 fi
                 if [[ $present == 1 && $visible == 0 ]]; then
-                    center_pending=1
-                    host_visibility 1
+                    host_visibility 1 1
                     visible=1
                 elif [[ $present == 1 && $handoff == 1 ]]; then
-                    center_pending=1
+                    host_visibility 1 1
                     startup=0
                 elif [[ $present == 0 && $startup == 0 ]]; then
                     host_visibility 0
